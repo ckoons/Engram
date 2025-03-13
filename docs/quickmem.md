@@ -44,6 +44,12 @@ think("Casey seems interested in making this interface simpler")
 
 # Store important facts
 remember("Casey works on AI projects and likes Python")
+
+# Auto-generate thoughts based on current context (no parameter needed)
+think()
+
+# Auto-remember important information from the conversation
+remember()
 ```
 
 ## Ultra-Short Aliases
@@ -59,6 +65,10 @@ t("This conversation is going well")
 
 # Remember important information
 r("Casey's birthday is in July")
+
+# Automatic reflection and memory (no parameters needed)
+t()  # Auto-generate a thought about the conversation
+r()  # Auto-remember important aspects of the conversation
 ```
 
 ## Conversation Flow
