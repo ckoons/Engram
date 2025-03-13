@@ -113,7 +113,7 @@ fi
 
 # Start memory bridge in the background
 echo -e "${GREEN}Starting memory bridge on port $MEMORY_PORT...${NC}"
-"$SCRIPT_DIR/cmb" --client-id "$CLIENT_ID" --port "$MEMORY_PORT" --data-dir "$DATA_DIR" > /tmp/cmb_memory.log 2>&1 &
+"$SCRIPT_DIR/cmb_executable" --client-id "$CLIENT_ID" --port "$MEMORY_PORT" --data-dir "$DATA_DIR" > /tmp/cmb_memory.log 2>&1 &
 MEMORY_PID=$!
 
 # Wait for memory bridge to start
