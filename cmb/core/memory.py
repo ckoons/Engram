@@ -71,15 +71,38 @@ class MemoryService:
             try:
                 # Initialize using the current mem0 API (MemoryClient)
                 self.namespaces = ["conversations", "thinking", "longterm", "projects"]
-                self.mem0_client = mem0.MemoryClient(
-                    config={"persistent_path": str(self.data_dir / "mem0")}
-                )
+                
+                # Set up environment for local storage (if no API key present)
+                os.environ["MEM0_API_KEY"] = os.environ.get("MEM0_API_KEY", "local")
+                
+                # Create memory client
+                self.mem0_client = mem0.MemoryClient()
                 
                 # Create memories for each namespace
                 self.namespace_memories = {}
                 for namespace in self.namespaces:
                     memory_name = f"cmb-{client_id}-{namespace}"
-                    self.namespace_memories[namespace] = self.mem0_client.get_memory(memory_name)
+                    
+                    # Create Memory object with collection name
+                    from mem0.configs.base import MemoryConfig
+                    from mem0.configs.vector_store import VectorStoreConfig, QdrantConfig
+                    
+                    # Configure vector store with the namespace as collection name
+                    vector_config = VectorStoreConfig(
+                        provider="qdrant",
+                        config=QdrantConfig(
+                            collection_name=memory_name,
+                            path=str(self.data_dir / "mem0")
+                        )
+                    )
+                    
+                    # Create memory config
+                    memory_config = MemoryConfig(
+                        vector_store=vector_config
+                    )
+                    
+                    # Create memory for this namespace
+                    self.namespace_memories[namespace] = mem0.Memory(config=memory_config)
                 
                 self.mem0_available = True
                 logger.info(f"Initialized mem0 MemoryClient for client {client_id}")
@@ -159,7 +182,7 @@ class MemoryService:
                     if memory:
                         # Add to memory
                         memory.add(
-                            text=content_str,
+                            messages=content_str,
                             metadata=metadata
                         )
                         logger.debug(f"Added memory to {namespace} using Memory API")
@@ -225,9 +248,9 @@ class MemoryService:
                         # Format the results
                         for result in results:
                             formatted_results.append({
-                                "content": result.text,
-                                "metadata": result.metadata,
-                                "relevance": result.score
+                                "content": result.get("text", "") if isinstance(result, dict) else result,
+                                "metadata": result.get("metadata", {}) if isinstance(result, dict) else {},
+                                "relevance": result.get("score", 1.0) if isinstance(result, dict) else 1.0
                             })
                 
                 return {
@@ -357,7 +380,7 @@ class MemoryService:
                     memory = self.namespace_memories.get(namespace)
                     if memory:
                         # Clear the memory
-                        memory.clear()
+                        memory.reset()
                         logger.info(f"Cleared namespace {namespace} in mem0 Memory")
                         return True
             except Exception as e:
