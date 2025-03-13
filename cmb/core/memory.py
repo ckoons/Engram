@@ -21,11 +21,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cmb.memory")
 
-# Try to import mem0 for vector storage (optional dependency)
+# Try to import mem0ai for vector storage (optional dependency)
 try:
-    import mem0
-    HAS_MEM0 = True
-    logger.info("mem0 library found, using vector-based memory")
+    # First try with mem0ai package
+    try:
+        import mem0ai as mem0
+        HAS_MEM0 = True
+        logger.info("mem0ai library found, using vector-based memory")
+    except ImportError:
+        # Fallback to mem0
+        import mem0
+        HAS_MEM0 = True
+        logger.info("mem0 library found, using vector-based memory")
 except ImportError:
     HAS_MEM0 = False
     logger.warning("mem0 library not found, using fallback memory implementation")
@@ -68,21 +75,44 @@ class MemoryService:
         # Initialize mem0 if available
         if HAS_MEM0:
             try:
-                # Initialize mem0 client with separate collections for each namespace
-                self.mem0_client = mem0.Client(
-                    client_id=f"cmb-{client_id}",
-                    root_path=str(self.data_dir / "mem0")
-                )
-                
-                # Create collections for each namespace if they don't exist
-                self.namespaces = ["conversations", "thinking", "longterm", "projects"]
-                for namespace in self.namespaces:
-                    collection_name = f"{client_id}-{namespace}"
-                    if collection_name not in self.mem0_client.list_collections():
-                        self.mem0_client.create_collection(collection_name)
-                
-                self.mem0_available = True
-                logger.info(f"Initialized mem0 for client {client_id}")
+                # Try to initialize the mem0 client
+                # First try with Collection (mem0ai 0.1.65 style)
+                try:
+                    # Initialize mem0 client with separate collections for each namespace
+                    self.mem0_client = mem0.Collection(
+                        name=f"cmb-{client_id}",
+                        root_path=str(self.data_dir / "mem0")
+                    )
+                    
+                    # Create collections for each namespace
+                    self.namespaces = ["conversations", "thinking", "longterm", "projects"]
+                    self.namespace_collections = {}
+                    
+                    for namespace in self.namespaces:
+                        collection_name = f"{client_id}-{namespace}"
+                        self.namespace_collections[namespace] = mem0.Collection(
+                            name=collection_name,
+                            root_path=str(self.data_dir / "mem0")
+                        )
+                    
+                    self.mem0_available = True
+                    logger.info(f"Initialized mem0 Collection API for client {client_id}")
+                except (AttributeError, TypeError):
+                    # Try legacy Client API
+                    self.mem0_client = mem0.Client(
+                        client_id=f"cmb-{client_id}",
+                        root_path=str(self.data_dir / "mem0")
+                    )
+                    
+                    # Create collections for each namespace if they don't exist
+                    self.namespaces = ["conversations", "thinking", "longterm", "projects"]
+                    for namespace in self.namespaces:
+                        collection_name = f"{client_id}-{namespace}"
+                        if collection_name not in self.mem0_client.list_collections():
+                            self.mem0_client.create_collection(collection_name)
+                    
+                    self.mem0_available = True
+                    logger.info(f"Initialized mem0 Client API for client {client_id}")
             except Exception as e:
                 logger.error(f"Error initializing mem0: {e}")
                 self.mem0_available = False
@@ -151,15 +181,26 @@ class MemoryService:
         # Store in mem0 if available
         if self.mem0_available:
             try:
-                collection_name = f"{self.client_id}-{namespace}"
                 memory_id = f"{namespace}-{int(time.time())}"
                 
-                self.mem0_client.add(
-                    collection=collection_name,
-                    documents=[content_str],
-                    metadatas=[metadata],
-                    ids=[memory_id]
-                )
+                if hasattr(self, 'namespace_collections'):
+                    # Using Collection API (mem0ai 0.1.65)
+                    collection = self.namespace_collections.get(namespace)
+                    if collection:
+                        collection.add(
+                            text=content_str,
+                            metadata=metadata,
+                            id=memory_id
+                        )
+                else:
+                    # Using Client API
+                    collection_name = f"{self.client_id}-{namespace}"
+                    self.mem0_client.add(
+                        collection=collection_name,
+                        documents=[content_str],
+                        metadatas=[metadata],
+                        ids=[memory_id]
+                    )
                 
                 logger.debug(f"Added memory to {namespace} with ID {memory_id}")
                 return True
@@ -209,27 +250,45 @@ class MemoryService:
         # Search mem0 if available
         if self.mem0_available:
             try:
-                collection_name = f"{self.client_id}-{namespace}"
-                
-                # Query the mem0 collection
-                results = self.mem0_client.query(
-                    collection=collection_name,
-                    query=query,
-                    n_results=limit
-                )
-                
-                # Format the results
                 formatted_results = []
                 
-                if results["documents"]:
-                    for i, doc in enumerate(results["documents"][0]):
-                        metadata = results["metadatas"][0][i] if i < len(results["metadatas"][0]) else {}
+                if hasattr(self, 'namespace_collections'):
+                    # Using Collection API (mem0ai 0.1.65)
+                    collection = self.namespace_collections.get(namespace)
+                    if collection:
+                        results = collection.search(
+                            query=query,
+                            limit=limit
+                        )
                         
-                        formatted_results.append({
-                            "content": doc,
-                            "metadata": metadata,
-                            "relevance": results["distances"][0][i] if "distances" in results else None
-                        })
+                        # Format the results from Collection API
+                        for item in results:
+                            formatted_results.append({
+                                "content": item.get("text", ""),
+                                "metadata": item.get("metadata", {}),
+                                "relevance": item.get("score", None)
+                            })
+                else:
+                    # Using Client API
+                    collection_name = f"{self.client_id}-{namespace}"
+                    
+                    # Query the mem0 collection
+                    results = self.mem0_client.query(
+                        collection=collection_name,
+                        query=query,
+                        n_results=limit
+                    )
+                    
+                    # Format the results from Client API
+                    if results.get("documents"):
+                        for i, doc in enumerate(results["documents"][0]):
+                            metadata = results["metadatas"][0][i] if i < len(results["metadatas"][0]) else {}
+                            
+                            formatted_results.append({
+                                "content": doc,
+                                "metadata": metadata,
+                                "relevance": results["distances"][0][i] if "distances" in results else None
+                            })
                 
                 return {
                     "results": formatted_results,
@@ -353,13 +412,22 @@ class MemoryService:
         # Clear mem0 if available
         if self.mem0_available:
             try:
-                collection_name = f"{self.client_id}-{namespace}"
+                if hasattr(self, 'namespace_collections'):
+                    # Using Collection API (mem0ai 0.1.65)
+                    collection = self.namespace_collections.get(namespace)
+                    if collection:
+                        # Clear the collection
+                        collection.clear()
+                        logger.info(f"Cleared namespace {namespace} in mem0 Collection")
+                else:
+                    # Using Client API
+                    collection_name = f"{self.client_id}-{namespace}"
+                    
+                    # Delete and recreate the collection
+                    self.mem0_client.delete_collection(collection_name)
+                    self.mem0_client.create_collection(collection_name)
+                    logger.info(f"Cleared namespace {namespace} in mem0 Client")
                 
-                # Delete and recreate the collection
-                self.mem0_client.delete_collection(collection_name)
-                self.mem0_client.create_collection(collection_name)
-                
-                logger.info(f"Cleared namespace {namespace} in mem0")
             except Exception as e:
                 logger.error(f"Error clearing namespace in mem0: {e}")
                 return False
