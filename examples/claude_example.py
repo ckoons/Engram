@@ -6,7 +6,14 @@ This script demonstrates how to use the Memory Bridge with Claude.
 """
 
 import os
-from claude_helper import (
+import sys
+
+# Add project root to Python path to find the module
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, ".."))
+sys.path.insert(0, project_root)
+
+from cmb.cli.claude_helper import (
     check_health, 
     query_memory, 
     store_memory, 
