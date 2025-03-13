@@ -217,7 +217,8 @@ class MemoryService:
     async def search(self, 
                     query: str, 
                     namespace: str = "conversations", 
-                    limit: int = 5) -> Dict[str, Any]:
+                    limit: int = 5,
+                    check_forget: bool = True) -> Dict[str, Any]:
         """
         Search for memories based on a query.
         
@@ -225,6 +226,7 @@ class MemoryService:
             query: The search query
             namespace: The namespace to search in (default: "conversations")
             limit: Maximum number of results to return
+            check_forget: Whether to check for and filter out forgotten information
             
         Returns:
             Dictionary with search results
@@ -253,10 +255,52 @@ class MemoryService:
                                 "relevance": result.get("score", 1.0) if isinstance(result, dict) else 1.0
                             })
                 
+                # If check_forget is enabled, get forget instructions from longterm memory
+                forgotten_items = []
+                if check_forget and namespace != "longterm":
+                    try:
+                        # Search for FORGET instructions
+                        forget_results = await self.search(
+                            query="FORGET/IGNORE",
+                            namespace="longterm",
+                            limit=100,
+                            check_forget=False  # Prevent recursion
+                        )
+                        
+                        # Extract the forgotten items
+                        for item in forget_results.get("results", []):
+                            content = item.get("content", "")
+                            if content.startswith("FORGET/IGNORE: "):
+                                forgotten_text = content[len("FORGET/IGNORE: "):]
+                                forgotten_items.append(forgotten_text)
+                    except Exception as e:
+                        logger.error(f"Error checking for forgotten items: {e}")
+                
+                # Filter out forgotten items
+                if forgotten_items:
+                    filtered_results = []
+                    for result in formatted_results:
+                        should_include = True
+                        content = result.get("content", "")
+                        
+                        # Check if any forgotten item appears in this content
+                        for forgotten in forgotten_items:
+                            if forgotten.lower() in content.lower():
+                                # This memory contains forgotten information
+                                should_include = False
+                                logger.debug(f"Filtered out memory containing: {forgotten}")
+                                break
+                        
+                        if should_include:
+                            filtered_results.append(result)
+                    
+                    formatted_results = filtered_results
+                
                 return {
                     "results": formatted_results,
                     "count": len(formatted_results),
-                    "namespace": namespace
+                    "namespace": namespace,
+                    "forgotten_count": len(forgotten_items) if forgotten_items else 0
                 }
             except Exception as e:
                 logger.error(f"Error searching mem0: {e}")
@@ -283,10 +327,44 @@ class MemoryService:
             )
             results = results[:limit]
             
+            # If check_forget is enabled, filter out forgotten items from fallback too
+            forgotten_items = []
+            if check_forget and namespace != "longterm":
+                try:
+                    # Look for FORGET instructions in longterm namespace
+                    for memory in self.fallback_memories.get("longterm", []):
+                        content = memory.get("content", "")
+                        if content.startswith("FORGET/IGNORE: "):
+                            forgotten_text = content[len("FORGET/IGNORE: "):]
+                            forgotten_items.append(forgotten_text)
+                except Exception as e:
+                    logger.error(f"Error checking for forgotten items in fallback: {e}")
+            
+            # Filter results if needed
+            if forgotten_items:
+                filtered_results = []
+                for result in results:
+                    should_include = True
+                    content = result.get("content", "")
+                    
+                    # Check if any forgotten item appears in this content
+                    for forgotten in forgotten_items:
+                        if forgotten.lower() in content.lower():
+                            # This memory contains forgotten information
+                            should_include = False
+                            logger.debug(f"Filtered out fallback memory containing: {forgotten}")
+                            break
+                    
+                    if should_include:
+                        filtered_results.append(result)
+                
+                results = filtered_results
+            
             return {
                 "results": results,
                 "count": len(results),
-                "namespace": namespace
+                "namespace": namespace,
+                "forgotten_count": len(forgotten_items) if forgotten_items else 0
             }
         except Exception as e:
             logger.error(f"Error searching fallback memory: {e}")

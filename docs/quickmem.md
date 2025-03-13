@@ -69,7 +69,43 @@ r("Casey's birthday is in July")
 # Automatic reflection and memory (no parameters needed)
 t()  # Auto-generate a thought about the conversation
 r()  # Auto-remember important aspects of the conversation
+
+# Forget incorrect information (requires a parameter)
+f("Casey has a brother named Michael")  # Mark this as incorrect information to ignore
+
+# Ignore current information (requires a parameter)
+i("Please don't store this part of our conversation")  # Ignore specific content
 ```
+
+## Memory Management Commands
+
+### Forgetting Information
+
+The `forget()` command (alias `f()`) marks specific information as incorrect or to be ignored:
+
+```python
+# Mark incorrect or outdated information to be ignored
+forget("Casey lives in San Francisco")
+
+# Use the short alias
+f("Casey's favorite color is green")
+```
+
+All `forget` commands require a parameter specifying exactly what to forget. The system will store this as a special "FORGET/IGNORE" instruction that you should check when retrieving memories.
+
+### Ignoring Current Context
+
+The `ignore()` command (alias `i()`) explicitly asks Claude to ignore specific information from the current conversation:
+
+```python
+# Ignore sensitive or irrelevant information
+ignore("My password is 12345")
+
+# Use the short alias
+i("This sentence is just an example and should be ignored")
+```
+
+The `ignore` command acknowledges the request without storing it, allowing you to specify parts of a conversation that should not be remembered.
 
 ## Conversation Flow
 

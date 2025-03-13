@@ -162,10 +162,65 @@ def remember(info: str = None):
         print(f"Error storing information: {e}")
         return False
 
+def forget(info: str):
+    """
+    Mark specific information to be forgotten/ignored in memory.
+    
+    Args:
+        info: The information to forget or mark as invalid
+    """
+    if not info:
+        print("❌ Please specify what to forget")
+        return False
+        
+    try:
+        # Store this as a special "forget" instruction in longterm memory
+        forget_instruction = f"FORGET/IGNORE: {info}"
+        url = f"{_get_http_url()}/store?key=forget&value={_safe_string(forget_instruction)}&namespace=longterm"
+        
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                print(f"🗑️ Marked for forgetting: \"{info}\"")
+                return True
+            else:
+                print(f"❌ Failed to mark information for forgetting")
+                return False
+    except Exception as e:
+        print(f"Error in forget operation: {e}")
+        return False
+
+def ignore(info: str):
+    """
+    Explicitly ignore information from the current conversation.
+    Must have a string parameter specifying what to ignore.
+    
+    Args:
+        info: The information to ignore
+    """
+    if not info:
+        print("❌ Please specify what to ignore")
+        return False
+        
+    try:
+        # Mark this specifically as information to be ignored
+        ignore_instruction = f"IGNORE FROM CONVERSATION: {info}"
+        print(f"🔇 Ignoring: \"{info}\"")
+        
+        # We don't actually store this - that would be counterproductive
+        # Instead we just acknowledge the instruction
+        return True
+    except Exception as e:
+        print(f"Error in ignore operation: {e}")
+        return False
+
 # Shortcuts
 m = mem       # Even shorter alias for memory access
 t = think     # Shortcut for storing thoughts
 r = remember  # Shortcut for storing important information
+f = forget    # Shortcut for marking information to forget
+i = ignore    # Shortcut for ignoring information in current context
 
 if __name__ == "__main__":
     # Command-line interface
@@ -176,6 +231,10 @@ if __name__ == "__main__":
             think(sys.argv[2])
         elif command == "remember" and len(sys.argv) > 2:
             remember(sys.argv[2])
+        elif command == "forget" and len(sys.argv) > 2:
+            forget(sys.argv[2])
+        elif command == "ignore" and len(sys.argv) > 2:
+            ignore(sys.argv[2])
         else:
             mem(command if command != "mem" else None)
     else:
