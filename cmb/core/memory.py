@@ -66,11 +66,16 @@ class MemoryService:
         self.mem0_client = None
         self.mem0_available = False
         
+        # Store active compartments
+        self.active_compartments = []
+        self.compartment_file = self.data_dir / f"{client_id}-compartments.json"
+        self.compartments = self._load_compartments()
+        
         # Initialize mem0 if available
         if HAS_MEM0:
             try:
                 # Initialize using the current mem0 API (MemoryClient)
-                self.namespaces = ["conversations", "thinking", "longterm", "projects"]
+                self.namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
                 
                 # Set up environment for local storage (if no API key present)
                 os.environ["MEM0_API_KEY"] = os.environ.get("MEM0_API_KEY", "local")
@@ -104,6 +109,10 @@ class MemoryService:
                     # Create memory for this namespace
                     self.namespace_memories[namespace] = mem0.Memory(config=memory_config)
                 
+                # Create compartment memories
+                for compartment_id in self.compartments:
+                    self._ensure_compartment_memory(compartment_id)
+                
                 self.mem0_available = True
                 logger.info(f"Initialized mem0 MemoryClient for client {client_id}")
             except Exception as e:
@@ -125,9 +134,15 @@ class MemoryService:
                     self.fallback_memories = {}
             
             # Initialize with empty namespaces if needed
-            for namespace in ["conversations", "thinking", "longterm", "projects"]:
+            for namespace in ["conversations", "thinking", "longterm", "projects", "compartments", "session"]:
                 if namespace not in self.fallback_memories:
                     self.fallback_memories[namespace] = []
+                    
+            # Initialize compartment storage in fallback memories
+            for compartment_id in self.compartments:
+                compartment_ns = f"compartment-{compartment_id}"
+                if compartment_ns not in self.fallback_memories:
+                    self.fallback_memories[compartment_ns] = []
     
     async def add(self, 
                   content: Union[str, List[Dict[str, str]]], 
@@ -144,7 +159,19 @@ class MemoryService:
         Returns:
             Boolean indicating success
         """
-        if namespace not in ["conversations", "thinking", "longterm", "projects"]:
+        # Check if namespace is a valid base namespace or a compartment
+        valid_namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
+        
+        # Support compartment namespaces 
+        if namespace.startswith("compartment-"):
+            compartment_id = namespace[len("compartment-"):]
+            if compartment_id in self.compartments:
+                # Valid compartment
+                self._ensure_compartment_memory(compartment_id)
+            else:
+                logger.warning(f"Invalid compartment: {compartment_id}, using 'conversations'")
+                namespace = "conversations"
+        elif namespace not in valid_namespaces:
             logger.warning(f"Invalid namespace: {namespace}, using 'conversations'")
             namespace = "conversations"
         
@@ -231,7 +258,16 @@ class MemoryService:
         Returns:
             Dictionary with search results
         """
-        if namespace not in ["conversations", "thinking", "longterm", "projects"]:
+        # Check if namespace is a valid base namespace or a compartment
+        valid_namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
+        
+        # Support compartment namespaces
+        if namespace.startswith("compartment-"):
+            compartment_id = namespace[len("compartment-"):]
+            if compartment_id not in self.compartments:
+                logger.warning(f"Invalid compartment: {compartment_id}, using 'conversations'")
+                namespace = "conversations"
+        elif namespace not in valid_namespaces:
             logger.warning(f"Invalid namespace: {namespace}, using 'conversations'")
             namespace = "conversations"
         
@@ -386,7 +422,12 @@ class MemoryService:
             Formatted context string
         """
         if namespaces is None:
+            # Include base namespaces
             namespaces = ["conversations", "thinking", "longterm"]
+            
+            # Add active compartments
+            for compartment_id in self.active_compartments:
+                namespaces.append(f"compartment-{compartment_id}")
         
         all_results = []
         
@@ -419,6 +460,14 @@ class MemoryService:
                     context_parts.append(f"\n#### Important Information\n")
                 elif namespace == "projects":
                     context_parts.append(f"\n#### Project Context\n")
+                elif namespace == "session":
+                    context_parts.append(f"\n#### Session Memory\n")
+                elif namespace == "compartments":
+                    context_parts.append(f"\n#### Compartment Information\n")
+                elif namespace.startswith("compartment-"):
+                    compartment_id = namespace[len("compartment-"):]
+                    compartment_name = self.compartments.get(compartment_id, {}).get("name", compartment_id)
+                    context_parts.append(f"\n#### Compartment: {compartment_name}\n")
                 
                 for i, result in enumerate(namespace_results):
                     timestamp = result.get("metadata", {}).get("timestamp", "Unknown time")
@@ -434,7 +483,12 @@ class MemoryService:
     
     async def get_namespaces(self) -> List[str]:
         """Get available namespaces."""
-        return ["conversations", "thinking", "longterm", "projects"]
+        base_namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
+        
+        # Add compartment namespaces
+        compartment_namespaces = [f"compartment-{c_id}" for c_id in self.compartments]
+        
+        return base_namespaces + compartment_namespaces
     
     async def clear_namespace(self, namespace: str) -> bool:
         """
@@ -446,7 +500,15 @@ class MemoryService:
         Returns:
             Boolean indicating success
         """
-        if namespace not in ["conversations", "thinking", "longterm", "projects"]:
+        valid_namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
+        
+        # Support compartment namespaces
+        if namespace.startswith("compartment-"):
+            compartment_id = namespace[len("compartment-"):]
+            if compartment_id not in self.compartments:
+                logger.warning(f"Invalid compartment: {compartment_id}")
+                return False
+        elif namespace not in valid_namespaces:
             logger.warning(f"Invalid namespace: {namespace}")
             return False
         
@@ -477,4 +539,313 @@ class MemoryService:
             return True
         except Exception as e:
             logger.error(f"Error clearing namespace in fallback storage: {e}")
+            return False
+            
+    def _load_compartments(self) -> Dict[str, Dict[str, Any]]:
+        """Load compartment definitions from file."""
+        if self.compartment_file.exists():
+            try:
+                with open(self.compartment_file, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading compartments: {e}")
+        
+        # Initialize with empty compartments dict if none exists
+        return {}
+        
+    def _save_compartments(self) -> bool:
+        """Save compartment definitions to file."""
+        try:
+            with open(self.compartment_file, "w") as f:
+                json.dump(self.compartments, f, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Error saving compartments: {e}")
+            return False
+            
+    def _ensure_compartment_memory(self, compartment_id: str) -> bool:
+        """Ensure memory storage exists for the given compartment."""
+        if not self.mem0_available:
+            # For fallback storage, just initialize an empty list if needed
+            namespace = f"compartment-{compartment_id}"
+            if namespace not in self.fallback_memories:
+                self.fallback_memories[namespace] = []
+            return True
+            
+        # For mem0 storage, create a memory object for the compartment
+        try:
+            if not hasattr(self, 'namespace_memories'):
+                return False
+                
+            namespace = f"compartment-{compartment_id}"
+            if namespace in self.namespace_memories:
+                return True
+                
+            # Create Memory object with collection name
+            memory_name = f"cmb-{self.client_id}-{namespace}"
+            
+            from mem0.configs.base import MemoryConfig
+            from mem0.configs.vector_store import VectorStoreConfig, QdrantConfig
+            
+            # Configure vector store with the namespace as collection name
+            vector_config = VectorStoreConfig(
+                provider="qdrant",
+                config=QdrantConfig(
+                    collection_name=memory_name,
+                    path=str(self.data_dir / "mem0")
+                )
+            )
+            
+            # Create memory config
+            memory_config = MemoryConfig(
+                vector_store=vector_config
+            )
+            
+            # Create memory for this namespace
+            self.namespace_memories[namespace] = mem0.Memory(config=memory_config)
+            return True
+        except Exception as e:
+            logger.error(f"Error creating memory for compartment {compartment_id}: {e}")
+            return False
+    
+    async def create_compartment(self, name: str, description: str = None, parent: str = None) -> Optional[str]:
+        """
+        Create a new memory compartment.
+        
+        Args:
+            name: Name of the compartment
+            description: Optional description
+            parent: Optional parent compartment ID for hierarchical organization
+            
+        Returns:
+            Compartment ID if successful, None otherwise
+        """
+        try:
+            # Generate a unique ID for the compartment
+            compartment_id = f"{int(time.time())}-{name.lower().replace(' ', '-')}"
+            
+            # Create compartment data
+            compartment_data = {
+                "id": compartment_id,
+                "name": name,
+                "description": description,
+                "parent": parent,
+                "created_at": datetime.now().isoformat(),
+                "last_accessed": datetime.now().isoformat(),
+                "expiration": None  # No expiration by default
+            }
+            
+            # Store in compartments
+            self.compartments[compartment_id] = compartment_data
+            
+            # Save to file
+            self._save_compartments()
+            
+            # Ensure storage exists for this compartment
+            self._ensure_compartment_memory(compartment_id)
+            
+            # Store the compartment info in the compartments namespace
+            await self.add(
+                content=f"Compartment: {name} (ID: {compartment_id})\nDescription: {description or 'N/A'}\nParent: {parent or 'None'}",
+                namespace="compartments",
+                metadata={"compartment_id": compartment_id}
+            )
+            
+            return compartment_id
+        except Exception as e:
+            logger.error(f"Error creating compartment: {e}")
+            return None
+    
+    async def activate_compartment(self, compartment_id_or_name: str) -> bool:
+        """
+        Activate a compartment to include in automatic context retrieval.
+        
+        Args:
+            compartment_id_or_name: ID or name of compartment to activate
+            
+        Returns:
+            Boolean indicating success
+        """
+        try:
+            # Check if the input is a compartment ID
+            if compartment_id_or_name in self.compartments:
+                compartment_id = compartment_id_or_name
+            else:
+                # Look for a compartment with matching name
+                for c_id, c_data in self.compartments.items():
+                    if c_data.get("name", "").lower() == compartment_id_or_name.lower():
+                        compartment_id = c_id
+                        break
+                else:
+                    logger.warning(f"No compartment found matching '{compartment_id_or_name}'")
+                    return False
+            
+            # Update last accessed time
+            self.compartments[compartment_id]["last_accessed"] = datetime.now().isoformat()
+            self._save_compartments()
+            
+            # Add to active compartments if not already active
+            if compartment_id not in self.active_compartments:
+                self.active_compartments.append(compartment_id)
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error activating compartment: {e}")
+            return False
+    
+    async def deactivate_compartment(self, compartment_id_or_name: str) -> bool:
+        """
+        Deactivate a compartment to exclude from automatic context retrieval.
+        
+        Args:
+            compartment_id_or_name: ID or name of compartment to deactivate
+            
+        Returns:
+            Boolean indicating success
+        """
+        try:
+            # Check if the input is a compartment ID
+            if compartment_id_or_name in self.compartments:
+                compartment_id = compartment_id_or_name
+            else:
+                # Look for a compartment with matching name
+                for c_id, c_data in self.compartments.items():
+                    if c_data.get("name", "").lower() == compartment_id_or_name.lower():
+                        compartment_id = c_id
+                        break
+                else:
+                    logger.warning(f"No compartment found matching '{compartment_id_or_name}'")
+                    return False
+            
+            # Remove from active compartments
+            if compartment_id in self.active_compartments:
+                self.active_compartments.remove(compartment_id)
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error deactivating compartment: {e}")
+            return False
+    
+    async def set_compartment_expiration(self, compartment_id: str, days: int = None) -> bool:
+        """
+        Set expiration for a compartment in days.
+        
+        Args:
+            compartment_id: ID of the compartment
+            days: Number of days until expiration, or None to remove expiration
+            
+        Returns:
+            Boolean indicating success
+        """
+        if compartment_id not in self.compartments:
+            logger.warning(f"No compartment found with ID '{compartment_id}'")
+            return False
+        
+        try:
+            if days is None:
+                # Remove expiration
+                self.compartments[compartment_id]["expiration"] = None
+            else:
+                # Calculate expiration date
+                from datetime import timedelta
+                expiration_date = datetime.now() + timedelta(days=days)
+                self.compartments[compartment_id]["expiration"] = expiration_date.isoformat()
+            
+            # Save to file
+            self._save_compartments()
+            return True
+        except Exception as e:
+            logger.error(f"Error setting compartment expiration: {e}")
+            return False
+    
+    async def list_compartments(self, include_expired: bool = False) -> List[Dict[str, Any]]:
+        """
+        List all compartments.
+        
+        Args:
+            include_expired: Whether to include expired compartments
+            
+        Returns:
+            List of compartment information dictionaries
+        """
+        try:
+            result = []
+            now = datetime.now()
+            
+            for compartment_id, data in self.compartments.items():
+                # Check expiration if needed
+                if not include_expired and data.get("expiration"):
+                    try:
+                        expiration_date = datetime.fromisoformat(data["expiration"])
+                        if expiration_date < now:
+                            # Skip expired compartments
+                            continue
+                    except Exception as e:
+                        logger.error(f"Error parsing expiration date: {e}")
+                
+                # Add active status
+                compartment_info = data.copy()
+                compartment_info["active"] = compartment_id in self.active_compartments
+                
+                result.append(compartment_info)
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error listing compartments: {e}")
+            return []
+    
+    async def write_session_memory(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Write a memory to the session namespace for persistence across sessions.
+        
+        Args:
+            content: The content to store
+            metadata: Optional metadata
+            
+        Returns:
+            Boolean indicating success
+        """
+        try:
+            # Add to session namespace
+            return await self.add(content=content, namespace="session", metadata=metadata)
+        except Exception as e:
+            logger.error(f"Error writing session memory: {e}")
+            return False
+            
+    async def keep_memory(self, memory_id: str, days: int = 30) -> bool:
+        """
+        Keep a memory for a specified number of days by setting expiration.
+        
+        Args:
+            memory_id: The ID of the memory to keep
+            days: Number of days to keep the memory
+            
+        Returns:
+            Boolean indicating success
+        """
+        try:
+            # Find the memory
+            for namespace, memories in self.fallback_memories.items():
+                for memory in memories:
+                    if memory.get("id") == memory_id:
+                        # Set expiration date in metadata
+                        if "metadata" not in memory:
+                            memory["metadata"] = {}
+                        
+                        from datetime import timedelta
+                        expiration_date = datetime.now() + timedelta(days=days)
+                        memory["metadata"]["expiration"] = expiration_date.isoformat()
+                        
+                        # Save to file if using fallback storage
+                        if not self.mem0_available:
+                            with open(self.fallback_file, "w") as f:
+                                json.dump(self.fallback_memories, f, indent=2)
+                        
+                        return True
+            
+            # If not found in fallback, try mem0 (more complex, would need mem0-specific implementation)
+            logger.warning(f"Memory {memory_id} not found in fallback storage")
+            return False
+        except Exception as e:
+            logger.error(f"Error keeping memory: {e}")
             return False
