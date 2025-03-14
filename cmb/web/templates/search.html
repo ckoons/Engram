@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block title %}Advanced Search - Claude Memory Bridge{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Advanced Search</h1>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form class="row g-3" method="get" action="{{ url_for('search') }}">
+            <div class="col-md-6">
+                <label for="query" class="form-label">Search Query</label>
+                <input type="text" class="form-control" id="query" name="query" value="{{ query }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Namespaces to Search</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="conversations" name="namespaces" value="conversations" 
+                           {% if 'conversations' in namespaces %}checked{% endif %}>
+                    <label class="form-check-label" for="conversations">Conversations</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="thinking" name="namespaces" value="thinking"
+                           {% if 'thinking' in namespaces %}checked{% endif %}>
+                    <label class="form-check-label" for="thinking">Thinking</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="longterm" name="namespaces" value="longterm"
+                           {% if 'longterm' in namespaces %}checked{% endif %}>
+                    <label class="form-check-label" for="longterm">Long-term</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="session" name="namespaces" value="session"
+                           {% if 'session' in namespaces %}checked{% endif %}>
+                    <label class="form-check-label" for="session">Session</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label for="limit" class="form-label">Results Per Namespace</label>
+                <select class="form-select" id="limit" name="limit">
+                    <option value="10" {% if limit == 10 %}selected{% endif %}>10</option>
+                    <option value="25" {% if limit == 25 %}selected{% endif %}>25</option>
+                    <option value="50" {% if limit == 50 %}selected{% endif %}>50</option>
+                    <option value="100" {% if limit == 100 %}selected{% endif %}>100</option>
+                </select>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Search</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Found {{ count }} Memories</h5>
+    </div>
+    <div class="card-body">
+        {% if results %}
+            {% for memory in results %}
+                <div class="card memory-card {{ memory.namespace }}" style="margin-bottom: 10px;">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between">
+                            <h6 class="card-subtitle mb-1">
+                                <span class="badge bg-secondary">{{ memory.namespace }}</span>
+                                <small class="text-muted ms-2">{{ memory.formatted_time }}</small>
+                                {% if memory.score %}
+                                <small class="text-muted ms-2">Score: {{ "%.2f"|format(memory.score) }}</small>
+                                {% endif %}
+                            </h6>
+                            <div>
+                                <button class="btn btn-sm btn-outline-danger me-1" 
+                                      onclick="forgetMemory('{{ memory.id }}', '{{ memory.content|replace("'", "\\'") }}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                <a href="{{ url_for('memory_details', memory_id=memory.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-arrow-right-circle"></i>
+                                </a>
+                            </div>
+                        </div>
+                        <p class="card-text">{{ memory.content }}</p>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="text-muted">No memories found matching your search criteria.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function forgetMemory(memoryId, content) {
+        if (confirm('Are you sure you want to mark this memory to be forgotten?\n\n' + content)) {
+            fetch(`/api/forget_memory/${memoryId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    content: content
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Memory marked for forgetting.');
+                    location.reload();
+                } else {
+                    alert('Failed to mark memory for forgetting: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            });
+        }
+    }
+    
+    // Make sure at least one namespace is selected
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const checkboxes = document.querySelectorAll('input[name="namespaces"]:checked');
+        if (checkboxes.length === 0) {
+            e.preventDefault();
+            alert('Please select at least one namespace to search in.');
+        }
+    });
+</script>
+{% endblock %}

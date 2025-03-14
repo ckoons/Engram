@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+
+{% block title %}Memory Analytics - Claude Memory Bridge{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Memory Analytics</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="bi bi-printer"></i> Print Report
+        </button>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Memory Distribution by Namespace</h5>
+            </div>
+            <div class="card-body">
+                <div id="namespace-chart" style="height: 400px;">
+                    <div class="alert alert-warning">
+                        <strong>Charts temporarily disabled.</strong> There is a compatibility issue between NumPy 2.x and some visualization libraries.
+                        <p>Memory namespace distribution:</p>
+                        <ul>
+                            {% for namespace, count in namespace_counts.items() %}
+                            <li><strong>{{ namespace }}:</strong> {{ count }} memories</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Memory Growth Over Time</h5>
+            </div>
+            <div class="card-body">
+                <div id="growth-chart" style="height: 400px;">
+                    <div class="alert alert-warning">
+                        <strong>Charts temporarily disabled.</strong> There is a compatibility issue between NumPy 2.x and some visualization libraries.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if compartment_chart %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Memory Distribution by Compartment</h5>
+            </div>
+            <div class="card-body">
+                <div id="compartment-chart" style="height: 400px;">
+                    <div class="alert alert-warning">
+                        <strong>Charts temporarily disabled.</strong> There is a compatibility issue between NumPy 2.x and some visualization libraries.
+                        {% if compartment_counts %}
+                        <p>Memory compartment distribution:</p>
+                        <ul>
+                            {% for compartment, count in compartment_counts.items() %}
+                            <li><strong>{{ compartment }}:</strong> {{ count }} memories</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p>No compartments found.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Memory Counts by Namespace</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Namespace</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set total = namespace_counts.values()|sum %}
+                            {% for namespace, count in namespace_counts.items() %}
+                                <tr>
+                                    <td>{{ namespace }}</td>
+                                    <td>{{ count }}</td>
+                                    <td>
+                                        {% if total > 0 %}
+                                            {{ ((count / total) * 100)|round(1) }}%
+                                        {% else %}
+                                            0%
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            <tr class="table-secondary">
+                                <td><strong>Total</strong></td>
+                                <td><strong>{{ total }}</strong></td>
+                                <td><strong>100%</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Memory Counts by Compartment</h5>
+            </div>
+            <div class="card-body">
+                {% if compartment_counts %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Compartment</th>
+                                    <th>Count</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set total = compartment_counts.values()|sum %}
+                                {% for compartment, count in compartment_counts.items() %}
+                                    <tr>
+                                        <td>{{ compartment }}</td>
+                                        <td>{{ count }}</td>
+                                        <td>
+                                            {% if total > 0 %}
+                                                {{ ((count / total) * 100)|round(1) }}%
+                                            {% else %}
+                                                0%
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                <tr class="table-secondary">
+                                    <td><strong>Total</strong></td>
+                                    <td><strong>{{ total }}</strong></td>
+                                    <td><strong>100%</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No compartments found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Charts disabled due to NumPy 2.x compatibility issues
+    /*
+    // Render namespace distribution chart
+    const namespaceData = {{ namespace_chart|safe }};
+    Plotly.newPlot('namespace-chart', namespaceData.data, namespaceData.layout);
+    
+    // Render growth chart
+    const growthData = {{ growth_chart|safe }};
+    Plotly.newPlot('growth-chart', growthData.data, growthData.layout);
+    
+    {% if compartment_chart %}
+    // Render compartment distribution chart
+    const compartmentData = {{ compartment_chart|safe }};
+    Plotly.newPlot('compartment-chart', compartmentData.data, compartmentData.layout);
+    {% endif %}
+    */
+</script>
+{% endblock %}

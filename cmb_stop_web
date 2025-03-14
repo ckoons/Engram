@@ -1,0 +1,35 @@
+#!/bin/bash
+# Stop all Claude Memory Bridge services
+
+echo "Stopping Claude Memory Bridge services..."
+
+# Check if we have PID file
+if [ -f .cmb_pids ]; then
+  # Read PIDs from file
+  read -r CMB_PID HTTP_PID WEB_PID < .cmb_pids
+  
+  # Stop individual processes
+  if kill -0 $CMB_PID 2>/dev/null; then
+    echo "Stopping memory service (PID: $CMB_PID)..."
+    kill $CMB_PID
+  fi
+  
+  if kill -0 $HTTP_PID 2>/dev/null; then
+    echo "Stopping HTTP wrapper (PID: $HTTP_PID)..."
+    kill $HTTP_PID
+  fi
+  
+  if kill -0 $WEB_PID 2>/dev/null; then
+    echo "Stopping web UI (PID: $WEB_PID)..."
+    kill $WEB_PID
+  fi
+  
+  # Remove PID file
+  rm .cmb_pids
+else
+  # Try to find and kill all related processes
+  echo "No PID file found. Killing all cmb processes..."
+  pkill -f 'cmb|cmb_http|cmb_web'
+fi
+
+echo "All services stopped."

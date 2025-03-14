@@ -399,6 +399,41 @@ def keep(memory_id: str = None, days: int = 30):
         print(f"Error keeping memory: {e}")
         return False
 
+def correct(wrong_info: str, correct_info: str = None):
+    """
+    Correct inaccurate information by marking it to be forgotten and 
+    optionally storing the correct information.
+    
+    Args:
+        wrong_info: The incorrect information to forget
+        correct_info: The correct information to remember (optional)
+    """
+    if not wrong_info:
+        print("❌ Please specify what incorrect information to correct")
+        return False
+        
+    try:
+        # First, mark the wrong information to be forgotten
+        forget_result = forget(wrong_info)
+        
+        # If correct information is provided, store it
+        if correct_info and forget_result:
+            store_result = remember(correct_info)
+            
+            if store_result:
+                print(f"✓ Corrected: \"{wrong_info}\" → \"{correct_info}\"")
+                return True
+            else:
+                print(f"⚠️ Marked incorrect information but failed to store correction")
+                return False
+        
+        # If we only needed to forget, return the forget result
+        return forget_result
+        
+    except Exception as e:
+        print(f"Error in correction operation: {e}")
+        return False
+
 # Shortcuts
 m = mem       # Even shorter alias for memory access
 t = think     # Shortcut for storing thoughts
@@ -408,6 +443,7 @@ i = ignore    # Shortcut for ignoring information in current context
 w = write     # Shortcut for writing session memory
 c = compartment # Shortcut for compartmentalizing memory
 k = keep      # Shortcut for keeping memory for specific duration
+cx = correct  # Shortcut for correcting misinformation
 
 if __name__ == "__main__":
     # Command-line interface
@@ -430,6 +466,10 @@ if __name__ == "__main__":
             # Optional third parameter for days
             days = int(sys.argv[3]) if len(sys.argv) > 3 else 30
             keep(sys.argv[2], days)
+        elif command == "correct" and len(sys.argv) > 2:
+            # Optional third parameter for correct information
+            correct_info = sys.argv[3] if len(sys.argv) > 3 else None
+            correct(sys.argv[2], correct_info)
         else:
             mem(command if command != "mem" else None)
     else:

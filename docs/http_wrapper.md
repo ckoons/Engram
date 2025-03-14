@@ -51,6 +51,7 @@ context = get_context("current project")
 
 The HTTP wrapper exposes the following endpoints:
 
+### Basic Memory Operations
 - `GET /health` - Check the status of the memory bridge
 - `GET /store?key=<key>&value=<value>&namespace=<namespace>` - Store a memory
 - `GET /thinking?thought=<thought>` - Store a thought
@@ -58,6 +59,19 @@ The HTTP wrapper exposes the following endpoints:
 - `GET /query?query=<query>&namespace=<namespace>&limit=<limit>` - Query memories
 - `GET /context?query=<query>&include_thinking=<true|false>&limit=<limit>` - Get context
 - `GET /clear/<namespace>` - Clear all memories in a namespace
+
+### Session Persistence
+- `GET /write?content=<content>&metadata=<json_metadata>` - Write session memory for persistence
+
+### Memory Compartmentalization
+- `GET /compartment/create?name=<name>` - Create a new memory compartment
+- `GET /compartment/list` - List existing compartments and their active status
+- `GET /compartment/activate?compartment=<compartment_id_or_name>` - Activate a compartment
+- `GET /compartment/deactivate?compartment=<compartment_id_or_name>` - Deactivate a compartment
+- `GET /compartment/store?compartment=<compartment_id_or_name>&content=<content>` - Store in compartment
+
+### Memory Expiration
+- `GET /keep?memory_id=<memory_id>&days=<days>` - Set expiration date for a memory
 
 ## Standalone Usage
 
@@ -72,6 +86,21 @@ curl "http://localhost:8001/query?query=test&namespace=conversations"
 
 # Get context
 curl "http://localhost:8001/context?query=test"
+
+# Create a memory compartment
+curl "http://localhost:8001/compartment/create?name=ProjectX"
+
+# Store in a compartment
+curl "http://localhost:8001/compartment/store?compartment=ProjectX&content=Important%20project%20info"
+
+# List compartments
+curl "http://localhost:8001/compartment/list"
+
+# Write session memory
+curl "http://localhost:8001/write?content=Session%20notes%20to%20remember"
+
+# Set memory expiration
+curl "http://localhost:8001/keep?memory_id=memory123&days=90"
 ```
 
 ## Troubleshooting
@@ -79,6 +108,8 @@ curl "http://localhost:8001/context?query=test"
 - Make sure the HTTP wrapper is running on the correct port (8001 by default)
 - Check that the URL in `http_helper.py` matches the wrapper's address
 - If you change the port, set the `CMB_HTTP_URL` environment variable to the new address
+- Use `/health` endpoint to verify the service is running correctly
+- Check memory bridge logs for any errors related to compartment or expiration operations
 
 ## Security Considerations
 

@@ -4,34 +4,69 @@ This guide explains how to use Claude Memory Bridge (CMB) to give Claude persist
 
 ## Starting the Memory Bridge
 
-To start the memory bridge service:
+To start the memory bridge services:
 
 ```bash
+# Start all services (memory bridge and HTTP wrapper)
+./cmb_start_all
+
 # Start with default settings (client ID: "claude", port: 8000)
-cmb
+./cmb
+
+# Start HTTP wrapper (port: 8001)
+./cmb_http
 
 # Use a custom client ID
-cmb --client-id my-project
+./cmb --client-id my-project
 
 # Use a different port
-cmb --port 8080
+./cmb --port 8080
 
 # Specify a custom data directory
-cmb --data-dir /path/to/data
+./cmb --data-dir /path/to/data
 
 # Full options
-cmb --client-id my-project --port 8080 --host 0.0.0.0 --data-dir ~/cmb-data
+./cmb --client-id my-project --port 8080 --host 0.0.0.0 --data-dir ~/cmb-data
 ```
 
 The memory bridge service must be running whenever you want to use Claude's memory capabilities.
 
-## Using Memory in Claude Code
+## Using QuickMem (Recommended)
 
-In your Claude Code sessions, import the helper functions and use them to store and retrieve memories:
+For the easiest experience, use the QuickMem shortcuts:
 
 ```python
-# Import the helper functions
-from claude_helper import query_memory, store_memory, store_thinking, store_longterm
+# Import the ultra-short memory commands
+from cmb.cli.quickmem import m, t, r, w, c, k
+
+# Access memories with one command
+m("project")  # Check memories about your project
+
+# Store thoughts about the conversation
+t("User prefers clean code with detailed comments")
+
+# Remember important information
+r("User's project deadline is next Friday")
+
+# Write session memory for persistence
+w("Today we worked on implementing memory compartments")
+
+# Create or use memory compartments
+c("ProjectX: This is important info about ProjectX")
+
+# Control memory expiration
+k("memory_id_123", 90)  # Keep for 90 days
+```
+
+See [QuickMem Commands](quickmem.md) for detailed usage.
+
+## Using HTTP Helper (No Tool Approval)
+
+For more complete functionality without tool approval:
+
+```python
+# Import the HTTP helper
+from cmb.cli.http_helper import query_memory, store_memory, store_thinking, store_longterm
 
 # Check if Claude remembers anything about a topic
 memories = query_memory("project structure")
@@ -39,17 +74,32 @@ memories = query_memory("project structure")
 # Store an important fact in conversation memory
 store_memory("fact", "Casey prefers VSCode for Python development")
 
-# Store Claude's own thoughts (reflections, observations, reasoning)
-store_thinking("I notice Casey prefers concise explanations with examples rather than theoretical discussions")
+# Store Claude's own thoughts
+store_thinking("I notice Casey prefers concise explanations with examples")
 
-# Store critically important information that should be remembered long-term
-store_longterm("Casey and I are collaborating on a book project alongside technical work")
+# Store critically important information
+store_longterm("Casey and I are collaborating on a memory management project")
+```
 
-# Store project-specific information
-store_project_info("ClaudeMemoryBridge", "We started this project on March 13, 2025")
+## Using Direct Helper (With Tool Approval)
 
-# Get formatted context for the current conversation
-context = get_context("development preferences")
+For direct access to all features (requires tool approval):
+
+```python
+# Import the helper functions
+from cmb.core.claude_helper import query_memory, store_memory, store_thinking, store_longterm
+
+# Check if Claude remembers anything about a topic
+memories = query_memory("project structure")
+
+# Store an important fact in conversation memory
+store_memory("fact", "Casey prefers VSCode for Python development")
+
+# Store Claude's own thoughts
+store_thinking("I notice Casey prefers concise explanations with examples")
+
+# Store critically important information
+store_longterm("Casey and I are collaborating on a memory management project")
 ```
 
 ## Memory Namespaces
@@ -60,129 +110,139 @@ Claude Memory Bridge organizes memories into different namespaces:
 2. **thinking**: Claude's internal thought processes, observations, and reasoning
 3. **longterm**: High-priority information that Claude should always remember
 4. **projects**: Project-specific context and information
+5. **compartments**: Topic-specific organized memories (new in v0.2.0)
+6. **session**: Cross-conversation persistent memories (new in v0.2.0)
 
 You can query, store, and clear memories in each namespace separately.
 
+## Memory Management Features
+
+### Compartmentalization
+
+Organize memories into distinct categories using the `c()` function:
+
+```python
+# Create and store in a compartment
+c("ProjectX: This is important information for ProjectX")
+
+# Activate an existing compartment
+c("ProjectX")  # Now ProjectX memories will be included in context
+
+# List active compartments
+c()  # Shows all currently active compartments
+
+# Create hierarchical compartments
+c("Book.Chapter1: Introduction to memory systems")
+c("Book.Chapter2: Advanced memory techniques")
+```
+
+### Session Persistence
+
+Maintain important information across sessions with the `w()` function:
+
+```python
+# Store specific information for future sessions
+w("We discussed adding vector search capabilities to the project")
+
+# Store with metadata for better organization
+w("User preferences", {"theme": "dark", "notifications": True})
+
+# Write a general session summary
+w()  # Auto-generates a summary of important details
+```
+
+### Memory Expiration Control
+
+Control how long memories are retained with the `k()` function:
+
+```python
+# Keep a specific memory for 90 days
+k("memory_id_123", 90)
+
+# Use default retention (30 days)
+k("memory_id_456")
+```
+
 ## Example Workflow
 
-Here's a typical workflow when working with Claude:
+Here's a typical workflow with the advanced memory features:
 
-1. **Start Memory Bridge**: Run `cmb` in a terminal window
+1. **Start Services**: Run `./cmb_start_all` in a terminal
 2. **Begin Claude Code Session**: Start a new Claude Code session
-3. **Import Memory Helper**: Import the helper functions
-4. **Retrieve Relevant Context**: Have Claude check for relevant memories about the current task
-5. **Work on Task**: Proceed with your conversation and work
-6. **Store Important Information**: Have Claude store key information during the session
-7. **End Session**: When done, have Claude summarize and store the session for future reference
+3. **Import QuickMem**: `from cmb.cli.quickmem import m, t, r, w, c, k`
+4. **Create Project Compartment**: `c("MyProject: Working on memory features")`
+5. **Activate Compartment**: `c("MyProject")` 
+6. **Retrieve Context**: `m("project requirements")`
+7. **Work and Store Information**: Use `t()`, `r()`, and `c()` during work
+8. **Persist Important Info**: Use `w()` to save key information for next time
+9. **Control Retention**: Use `k()` for important memories
 
-## Example: Continuing a Project
+## Example: Using Compartments
 
 ```
-User: Let's continue working on the ClaudeMemoryBridge project. What do you remember about it?
+User: Let's organize our project information in compartments.
 
-Claude: Let me check my memory about the ClaudeMemoryBridge project.
+Claude: Good idea. Let me create a compartment for our project structure.
 
-[Claude runs: from claude_helper import query_memory; memories = query_memory("ClaudeMemoryBridge", namespace="projects")]
+[Claude runs: from cmb.cli.quickmem import c]
 
-I remember the following about the ClaudeMemoryBridge project:
-1. We started this project on March 13, 2025
-2. It provides namespaces for different types of memories: conversations, thinking, longterm, and projects
-3. The core components include a memory service, API server, and helper library
+[Claude runs: c("ProjectStructure: ClaudeMemoryBridge has a core module, API layer, and CLI interface")]
 
-Let's continue working on it. What aspect would you like to focus on today?
+🗂️ Created new compartment 'ProjectStructure' and stored content
+
+I've created a "ProjectStructure" compartment and stored basic information about our codebase organization. Let's add more details to it:
+
+[Claude runs: c("ProjectStructure: The core module handles vector search and memory persistence")]
+
+🗂️ Added to compartment: 'ProjectStructure'
+
+Now I'll activate this compartment so its information is included in our context:
+
+[Claude runs: c("ProjectStructure")]
+
+🗂️ Activated compartment: 'ProjectStructure'
+
+Great! Now when we discuss the project structure, I'll automatically include this information in my responses. Would you like to create any other compartments?
 ```
 
 ## CLI Commands
 
-The `claude_helper.py` script can also be used as a CLI tool for testing:
+For testing and debugging:
 
 ```bash
 # Check health status
-python -m claude_helper health
+curl http://localhost:8001/health
 
 # Query memory
-python -m claude_helper query "project structure" --namespace conversations
+curl "http://localhost:8001/query?query=project%20structure&namespace=conversations"
 
 # Store memory
-python -m claude_helper store "key" "value" --namespace conversations
+curl "http://localhost:8001/store?key=fact&value=This%20is%20important"
 
-# Store thought
-python -m claude_helper thinking "This is an important observation"
+# Create a compartment
+curl "http://localhost:8001/compartment/create?name=ProjectX"
 
-# Store longterm memory
-python -m claude_helper longterm "This is critical information"
-
-# Store project information
-python -m claude_helper project "ProjectName" "Project information to remember"
-
-# Get context
-python -m claude_helper context "current topic"
-
-# Clear namespace
-python -m claude_helper clear conversations
-```
-
-## Advanced Features
-
-### Memory Context for Enhanced Prompts
-
-You can inject memory context directly into prompts to help guide Claude:
-
-```python
-from claude_helper import get_context
-
-# Get memory context for the current topic
-context = get_context("user preferences")
-
-# Use it in your prompt
-prompt = f"""
-{context}
-
-Based on what you know about the user, recommend a Python library for their current project.
-"""
-```
-
-### Storing Conversation Summaries
-
-At the end of sessions, you can store a summary:
-
-```python
-from claude_helper import store_memory
-
-# Store session summary
-store_memory(
-    "session_summary", 
-    "In this session, we implemented the API server for Claude Memory Bridge, " +
-    "added namespace support, and created the startup script."
-)
-```
-
-### Managing Memory Growth
-
-For long-running projects, you may want to clear old or irrelevant memories:
-
-```python
-from claude_helper import clear_memories
-
-# Clear a specific namespace
-clear_memories("conversations")
+# Write session memory
+curl "http://localhost:8001/write?content=Session%20notes%20here"
 ```
 
 ## Troubleshooting
 
 If you encounter issues, check the following:
 
-1. **Memory Bridge Not Running**: Make sure the `cmb` service is running in a terminal
-2. **Connection Errors**: Verify the correct port (default: 8000) is being used
-3. **Import Errors**: Ensure `claude_helper.py` is accessible in your Python path
-4. **mem0 Not Found**: If you want vector search, install mem0ai: `pip install mem0ai>=0.1.65`
+1. **Services Not Running**: Ensure both `cmb` and `cmb_http` are running
+2. **Connection Errors**: Verify the correct ports (8000/8001) are being used
+3. **Import Errors**: Ensure packages are in your Python path
+4. **Vector Search Issues**: Install mem0ai: `pip install mem0ai>=0.1.65`
+5. **Compartment Not Found**: Check if the compartment exists with `c()`
 
-The memory bridge server logs to stdout, so check the terminal where it's running for error messages.
+The memory bridge server logs to stdout, so check the terminal for error messages.
 
 ## Custom Environment Variables
 
 You can configure CMB using environment variables:
 
 - `CMB_URL`: Memory Bridge server URL (default: "http://127.0.0.1:8000")
+- `CMB_HTTP_URL`: HTTP wrapper URL (default: "http://127.0.0.1:8001")
 - `CMB_CLIENT_ID`: Default client ID (default: "claude")
 - `CMB_DATA_DIR`: Data directory path (default: "~/.cmb")

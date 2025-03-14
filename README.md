@@ -10,6 +10,8 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 - Store and access its own thinking processes
 - Maintain long-term prioritized memories
 - Bridge context across different projects
+- Organize memories in compartments
+- Control memory expiration
 
 ## Features
 
@@ -18,8 +20,19 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
   - `thinking`: Preserve Claude's reasoning processes
   - `longterm`: Maintain high-priority facts and insights
   - `projects`: Connect context across different workspaces
+  - `compartments`: Organize memories by topic or project
+  - `session`: Persist memories between conversations
+
+- **Advanced Memory Management**:
+  - Memory compartmentalization for organization
+  - Session persistence for cross-conversation memory
+  - Time-based memory expiration control
+  - Hierarchical memory organization
+  - Memory correction for handling misinformation
+  - Web-based visualization and management UI
 
 - **Simple Interface**:
+  - Ultra-short commands with QuickMem (m, t, r, w, c, k)
   - Lightweight Python helper for Claude to access memories
   - Minimal dependencies, easy to run anywhere
   - Cross-session persistence with vector search
@@ -32,20 +45,32 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 ## Quick Start
 
 ```bash
-# Start the memory bridge service
-./cmb_start.sh
+# Start both the memory bridge and HTTP services
+./cmb_start_all
 
-# In your Claude session, access memories:
-from claude_helper import query_memory, store_memory
+# In your Claude session, access memories with QuickMem:
+from cmb.cli.quickmem import m, t, r, w, c, k, cx
 
-# Check if Claude remembers something
-memories = query_memory("our previous conversation", namespace="conversations")
+# Check memories about a topic
+m("project")
 
-# Store a thought process
-store_memory("thinking", "I've noticed that Casey prefers concise explanations with specific examples")
+# Store a thought
+t("Casey seems to prefer structured memory organization")
 
-# Store a long-term memory
-store_memory("longterm", "Casey and I are working on a book together alongside technical projects")
+# Remember important information
+r("Casey's current project is about memory management")
+
+# Create a compartment for project memories
+c("ProjectX: This is a memory about the ProjectX initiative")
+
+# Write session memory for persistence
+w("Today we worked on implementing compartmentalized memory")
+
+# Set memory expiration (30 days)
+k("memory_id_123")
+
+# Correct misinformation
+cx("Casey lives in San Francisco", "Casey lives in Seattle")
 ```
 
 ## Installation
@@ -58,13 +83,30 @@ cd ClaudeMemoryBridge
 # Install dependencies
 pip install -r requirements.txt
 
-# Start the service
-./cmb_start.sh
+# Or install the package
+pip install -e .
+
+# Start everything (interactive mode)
+./cmb_start_web
+
+# Start everything in background
+./cmb_start_web_bg
+./cmb_stop_web  # Stop background services when done
+
+# Or start services separately
+./cmb_start_all  # Memory services only
+./cmb_web        # Web UI only (requires memory services)
 ```
 
-## Usage
+## Documentation
 
-See the [documentation](docs/usage.md) for detailed usage instructions and examples.
+- [Usage Guide](docs/usage.md): Basic usage instructions and examples
+- [QuickMem Commands](docs/quickmem.md): Ultra-short memory command reference
+- [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
+- [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration
+- [Memory Visualization](docs/memory_visualization.md): Web-based UI for browsing and managing memories
+- [Simplified Web UI](docs/simplified_web_ui.md): Lightweight alternative for environments with dependency issues
+- [Future Enhancements](docs/future_enhancements.md): Planned features and improvements
 
 ## Contributing
 

@@ -1,0 +1,90 @@
+#!/bin/bash
+# Start all Claude Memory Bridge services including the web UI
+
+# Find the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+# Parse command line arguments
+HOST="127.0.0.1"
+PORT=8002
+DEBUG=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --host)
+      HOST="$2"
+      shift 2
+      ;;
+    --port)
+      PORT="$2"
+      shift 2
+      ;;
+    --debug)
+      DEBUG=true
+      shift
+      ;;
+    --help)
+      echo "Usage: ./cmb_start_web [options]"
+      echo ""
+      echo "Options:"
+      echo "  --host HOST      Host to bind the web UI to (default: 127.0.0.1)"
+      echo "  --port PORT      Port for the web UI (default: 8002)"
+      echo "  --debug          Run the web UI in debug mode"
+      echo "  --help           Show this help message"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Use --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
+echo "Starting Claude Memory Bridge with Web UI..."
+echo ""
+echo "1. Starting memory service..."
+nohup ./cmb > cmb.log 2>&1 &
+CMB_PID=$!
+echo "   Memory service started (PID: $CMB_PID)"
+
+# Wait a moment for the memory service to initialize
+sleep 2
+
+echo "2. Starting HTTP wrapper..."
+nohup ./cmb_http > cmb_http.log 2>&1 &
+HTTP_PID=$!
+echo "   HTTP wrapper started (PID: $HTTP_PID)"
+
+# Wait a moment for the HTTP wrapper to initialize
+sleep 2
+
+echo "3. Starting web UI on $HOST:$PORT..."
+if [ "$DEBUG" = true ]; then
+  echo "   Running in debug mode"
+  WEB_CMD="./cmb_web --host $HOST --port $PORT --debug"
+else
+  WEB_CMD="./cmb_web --host $HOST --port $PORT"
+fi
+
+echo ""
+echo "All services started!"
+echo "- Memory service: http://127.0.0.1:8000"
+echo "- HTTP wrapper:   http://127.0.0.1:8001"
+echo "- Web UI:         http://$HOST:$PORT"
+echo ""
+echo "Access the web interface at: http://$HOST:$PORT"
+echo ""
+echo "To stop all services, run: pkill -f 'cmb|cmb_http|cmb_web'"
+echo ""
+echo "Starting web UI in the foreground (press Ctrl+C to stop all services)..."
+echo ""
+
+# Run the web UI in the foreground
+$WEB_CMD
+
+# When the web UI is stopped, also stop the other services
+echo "Stopping services..."
+kill $CMB_PID $HTTP_PID
+echo "All services stopped"

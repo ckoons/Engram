@@ -17,9 +17,9 @@ QuickMem provides ultra-simple shorthand commands for accessing and storing memo
 
 2. In your Claude Code session, import QuickMem:
    ```python
-   from cmb.cli.quickmem import mem, think, remember
+   from cmb.cli.quickmem import mem, think, remember, write, compartment, keep
    # Or use the ultra-short aliases
-   from cmb.cli.quickmem import m, t, r
+   from cmb.cli.quickmem import m, t, r, w, c, k
    ```
 
 ## Usage
@@ -75,6 +75,18 @@ f("Casey has a brother named Michael")  # Mark this as incorrect information to 
 
 # Ignore current information (requires a parameter)
 i("Please don't store this part of our conversation")  # Ignore specific content
+
+# Write session memory (persist across sessions)
+w("Important insights from today's brainstorming")
+
+# Create or use memory compartments
+c("ProjectX: This is important information about ProjectX")
+
+# Keep memory for specific time period
+k("memory123", 90)  # Keep memory for 90 days
+
+# Correct misinformation
+cx("Casey has a brother named Michael", "Casey doesn't have a brother")  # Correct wrong information
 ```
 
 ## Memory Management Commands
@@ -107,6 +119,85 @@ i("This sentence is just an example and should be ignored")
 
 The `ignore` command acknowledges the request without storing it, allowing you to specify parts of a conversation that should not be remembered.
 
+### Session Persistence (Write)
+
+The `write()` command (alias `w()`) allows you to persist important information from the current session:
+
+```python
+# Store specific information for future sessions
+write("We discussed adding vector search capabilities to the project")
+
+# Store with metadata
+write("User preferences", {"theme": "dark", "notifications": True})
+
+# Write session summary (no parameter)
+w()  # Auto-generates a summary of important session details
+```
+
+This creates persistent memories that will be available in future conversations even after the current session ends.
+
+### Memory Compartmentalization
+
+The `compartment()` command (alias `c()`) creates and manages memory compartments:
+
+```python
+# Create and store in a compartment
+c("ProjectX: This is important information for ProjectX")
+
+# Activate an existing compartment
+c("ProjectX")  # Now ProjectX memories will be included in context
+
+# List active compartments
+c()  # Shows all currently active compartments
+```
+
+Compartments can be hierarchical by using dot notation:
+
+```python
+# Create nested compartments
+c("Book.Chapter1: Introduction to memory systems")
+c("Book.Chapter2: Advanced memory techniques")
+
+# Activate entire hierarchies
+c("Book")  # Activates all Book.* compartments
+```
+
+### Memory Expiration Control
+
+The `keep()` command (alias `k()`) sets expiration dates for memories:
+
+```python
+# Keep a specific memory for 90 days
+k("memory_id_123", 90)
+
+# Use default retention (30 days)
+k("memory_id_456")
+```
+
+This allows fine-grained control over how long specific memories should be retained.
+
+### Correcting Misinformation
+
+The `correct()` command (alias `cx()`) provides a way to handle incorrect information in memory:
+
+```python
+# Correct a misconception with the right information
+correct("Casey has a brother named Michael", "Casey doesn't have a brother")
+
+# Just forget incorrect information without a replacement
+correct("Casey lives in San Francisco")
+
+# Use the shorthand
+cx("Casey's favorite color is green", "Casey's favorite color is blue")
+```
+
+This is especially useful during conversations when Claude remembers something incorrectly:
+
+1. Claude: "How is your brother Michael doing?"
+2. You: "I don't have a brother."
+3. Claude: [Claude runs: `cx("Casey has a brother named Michael", "Casey doesn't have a brother")`]
+4. Claude: "I apologize for the mistake. I've corrected my memory."
+
 ## Conversation Flow
 
 Here's how to use QuickMem in a natural conversation:
@@ -123,20 +214,43 @@ Claude: Let me check my memory for that information.
 🌟 Important information:
   1. Casey's current wife's name is Olivia.
   2. Casey's first wife Dawn passed away in 2004.
+  3. Casey has a brother named Michael.
 
-Based on my memory, I know that your current wife is Olivia, and your first wife Dawn passed away in 2004.
+Based on my memory, I know that your current wife is Olivia, your first wife Dawn passed away in 2004, and you have a brother named Michael.
 
-User: Do I have any siblings?
+User: Actually, I don't have a brother. That information is incorrect.
 
-Claude: I don't see any information about siblings in my memory. Would you like to tell me about them?
+Claude: I apologize for the error. Let me correct that in my memory.
 
-User: Yes, I have a brother named Michael.
+[Claude runs: cx("Casey has a brother named Michael", "Casey doesn't have any brothers")]
 
-Claude: [Claude runs: r("Casey has a brother named Michael")]
+✓ Corrected: "Casey has a brother named Michael" → "Casey doesn't have any brothers"
 
-🌟 Information stored in long-term memory
+I've corrected my memory. I now understand that you don't have any brothers. Thank you for the correction.
 
-I'll remember that you have a brother named Michael. Thank you for sharing that information with me.
+User: Let's organize memories about my family in a separate compartment.
+
+Claude: [Claude runs: c("Family: Casey is married to Olivia and his first wife Dawn passed away in 2004")]
+
+🗂️ Created new compartment 'Family' and stored content
+
+I've created a Family compartment and stored that information. I'll make sure to keep family-related memories organized there from now on.
+
+User: I want to make sure these memories are preserved for at least 3 months.
+
+Claude: [Claude runs: k("memory_id_for_family_info", 90)]
+
+📅 Memory will be kept for 90 days
+
+I've set that memory to be kept for 90 days. I'll remember these important details about your family during that time.
+
+User: Great! Let's write this information to session memory so it persists across conversations.
+
+Claude: [Claude runs: w("Casey is married to Olivia. His first wife Dawn passed away in 2004. Casey doesn't have any siblings.")]
+
+📝 Session memory stored
+
+I've written this family information to session memory, so it will persist across our future conversations. Is there anything else you'd like me to remember?
 ```
 
 ## Behind the Scenes
