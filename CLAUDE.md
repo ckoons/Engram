@@ -38,6 +38,21 @@ Claude Memory Bridge (CMB) is a project to give Claude persistent memory across 
 - Log errors with appropriate level (info, warning, error)
 - Return meaningful error messages
 
+### Commit Messages
+
+```
+feat: Descriptive title for the changes
+
+- Bullet point describing key implementation details
+- Another bullet point with important design decisions
+- Additional context about the implementation
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+Co-Authored-By: Casey Koons <cskoons@gmail.com> & Claude <noreply@anthropic.com>
+```
+
+IMPORTANT: Always include co-authorship credit in the commit message. This properly attributes contributions to both Casey and Claude.
+
 ## Common Commands
 
 ```bash
