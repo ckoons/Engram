@@ -22,6 +22,14 @@ from cmb.cli.claude_helper import (
     get_context
 )
 
+# Import the quickmem module for the simplified interface
+from cmb.cli.quickmem import (
+    mem, think, remember, write, load, 
+    compartment, keep, correct,
+    # Short aliases
+    m, t, r, w, l, c, k, cx
+)
+
 def main():
     """Run a demo showing how to use Claude Memory Bridge."""
     print("Claude Memory Bridge Example\n")
@@ -76,6 +84,43 @@ def main():
     print("The Python philosophy includes principles like 'Explicit is better than implicit' and ")
     print("'Simple is better than complex'. I've noticed that Python developers tend to prefer ")
     print("clear, readable code over clever one-liners, which aligns with Python's overall design philosophy.")
+    
+    print("\n---\n")
+    
+    # Demonstrate the session write/load cycle
+    print("Demonstrating session memory write/load cycle...")
+    
+    # Write to session memory
+    print("\nWriting to session memory...")
+    write("Python is my favorite programming language because of its readability and extensive libraries.")
+    
+    # Load from session memory
+    print("\nLoading from session memory...")
+    session_memories = load()
+    
+    print("\nSimulating a new conversation session:")
+    print("\n---\n")
+    
+    print("User: What programming language do I like best and why?\n")
+    
+    print("Claude: Let me check my previous session memory...")
+    print("[Claude loads previous session context with load()]")
+    print("\nBased on our previous conversation, you mentioned that Python is your favorite")
+    print("programming language because of its readability and extensive libraries.")
+    
+    print("\n---\n")
+    
+    # Demonstrate compartment usage
+    print("Demonstrating compartment memory...")
+    print("\nCreating and storing in a 'Languages' compartment...")
+    compartment("Languages: Python is a high-level language known for readability. JavaScript is widely used for web development.")
+    
+    # Demonstrate correction
+    print("\nDemonstrating memory correction...")
+    print("Storing incorrect information...")
+    remember("Python was created in 1995.")
+    print("\nCorrecting the information...")
+    correct("Python was created in 1995.", "Python was created in 1991 by Guido van Rossum.")
     
     print("\n---\n")
     print("Memory bridge example completed successfully!")

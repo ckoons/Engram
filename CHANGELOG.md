@@ -5,7 +5,21 @@ All notable changes to the Claude Memory Bridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2025-03-14
+## [0.3.2] - 2025-03-14
+
+### Added
+
+- Session context restoration with `load()` function (alias `l()`):
+  - Load previously stored session memories
+  - Retrieve multiple memories with configurable limit parameter
+  - Easily restore context from previous conversations
+  - Simple API: `load()` or `l()` to get the most recent session memory
+  - Support for loading multiple memories: `load(5)` or `l(5)`
+- New HTTP endpoint `/load` for session memory retrieval
+- Updated documentation in quickmem.md with examples and usage
+- Comprehensive cross-session memory workflow with `write()` and `load()`
+
+## [0.3.1] - 2025-03-14
 
 ### Added
 
@@ -98,7 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated QuickMem import statement to include new functions:
   ```python
-  from cmb.cli.quickmem import m, t, r, w, c, k, cx
+  from cmb.cli.quickmem import m, t, r, w, l, c, k, cx
   ```
 - Revised memory retrieval to include active compartments in context
 - Enhanced namespace validation to support compartment namespaces

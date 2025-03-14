@@ -17,9 +17,9 @@ QuickMem provides ultra-simple shorthand commands for accessing and storing memo
 
 2. In your Claude Code session, import QuickMem:
    ```python
-   from cmb.cli.quickmem import mem, think, remember, write, compartment, keep
+   from cmb.cli.quickmem import mem, think, remember, write, load, compartment, keep
    # Or use the ultra-short aliases
-   from cmb.cli.quickmem import m, t, r, w, c, k
+   from cmb.cli.quickmem import m, t, r, w, l, c, k
    ```
 
 ## Usage
@@ -79,6 +79,10 @@ i("Please don't store this part of our conversation")  # Ignore specific content
 # Write session memory (persist across sessions)
 w("Important insights from today's brainstorming")
 
+# Load previously stored session memories
+l()  # Load the most recent session memory
+l(3)  # Load the 3 most recent session memories
+
 # Create or use memory compartments
 c("ProjectX: This is important information about ProjectX")
 
@@ -119,7 +123,7 @@ i("This sentence is just an example and should be ignored")
 
 The `ignore` command acknowledges the request without storing it, allowing you to specify parts of a conversation that should not be remembered.
 
-### Session Persistence (Write)
+### Session Persistence (Write and Load)
 
 The `write()` command (alias `w()`) allows you to persist important information from the current session:
 
@@ -135,6 +139,21 @@ w()  # Auto-generates a summary of important session details
 ```
 
 This creates persistent memories that will be available in future conversations even after the current session ends.
+
+The complementary `load()` command (alias `l()`) retrieves previously stored session memories:
+
+```python
+# Load the most recent session memory
+load()
+
+# Load multiple session memories
+load(5)  # Load the 5 most recent session memories
+
+# Use the short alias
+l()  # Load the most recent session memory
+```
+
+This makes it easy to restore context from previous sessions when starting a new conversation.
 
 ### Memory Compartmentalization
 
@@ -251,6 +270,26 @@ Claude: [Claude runs: w("Casey is married to Olivia. His first wife Dawn passed 
 📝 Session memory stored
 
 I've written this family information to session memory, so it will persist across our future conversations. Is there anything else you'd like me to remember?
+
+User: In our next conversation, how would I retrieve this session memory?
+
+Claude: That's a great question! In our next conversation, you can retrieve the session memory like this:
+
+[Claude runs: l()]
+
+📖 Loaded 1 session memories:
+  1. Casey is married to Olivia. His first wife Dawn passed away in 2004. Casey doesn't have any siblings.
+
+You can use the `load()` function or its shorthand `l()` to retrieve session memories. By default, it retrieves the most recent memory, but you can also specify how many memories to load:
+
+[Claude runs: l(3)]
+
+📖 Loaded 3 session memories:
+  1. Casey is married to Olivia. His first wife Dawn passed away in 2004. Casey doesn't have any siblings.
+  2. Casey likes to work on AI projects and enjoys Python programming.
+  3. Casey prefers dark mode for all his applications.
+
+This way, you can quickly restore context from our previous conversations.
 ```
 
 ## Behind the Scenes

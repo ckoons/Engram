@@ -12,7 +12,7 @@ Add the ability to automatically copy the import line to the clipboard when star
 ./cmb_start_all --clipboard
 ```
 
-This would copy `from cmb.cli.quickmem import m, t, r, w, c, k` to the clipboard, allowing users to start a Claude Code session and simply paste (Ctrl+V/Cmd+V) to enable memory access.
+This would copy `from cmb.cli.quickmem import m, t, r, w, l, c, k, cx` to the clipboard, allowing users to start a Claude Code session and simply paste (Ctrl+V/Cmd+V) to enable memory access.
 
 Implementation notes:
 - Use platform-specific clipboard libraries:
@@ -24,9 +24,15 @@ Implementation notes:
 
 ### Context Reloading
 
+✅ **Implemented** in v0.3.2:
 - Add a `load()` function (alias: `l()`) to restore previous session context
-- Support options like `l("latest")` or `l("project: Agenteer")`
+- Support loading multiple memories with `l(5)` to get the last 5 session memories
+
+**Future Improvements**:
+- Add targeted loading with `l("project: Agenteer")`
+- Support filtering by metadata or content patterns
 - Enable switching between projects by loading specific context sets
+- Create UI component in web interface for session browsing
 
 ## Memory Management
 

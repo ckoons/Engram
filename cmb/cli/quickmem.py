@@ -6,11 +6,18 @@ This module provides simple shorthand commands to access memory during conversat
 Import this at the start of your Claude Code session.
 
 Usage:
-  from cmb.cli.quickmem import mem
+  from cmb.cli.quickmem import mem, think, remember, write, load, compartment, keep
+  # Or use the ultra-short aliases
+  from cmb.cli.quickmem import m, t, r, w, l, c, k
 
   # Then during conversation:
-  mem("wife")  # Searches for memories about your wife
-  mem()        # Searches for relevant memories based on recent conversation
+  mem("wife")      # Searches for memories about your wife
+  mem()            # Searches for relevant memories based on recent conversation
+  think("insight") # Store a thought for future reference
+  write("note")    # Store session memory for persistence across sessions
+  load()           # Load previously stored session memories
+  c("Project: Important info about the project") # Store in a compartment
+  k("memory-id", 90) # Keep a memory for 90 days
 """
 
 import os
@@ -399,6 +406,35 @@ def keep(memory_id: str = None, days: int = 30):
         print(f"Error keeping memory: {e}")
         return False
 
+def load(limit: int = 1):
+    """
+    Load memories from the session namespace.
+    
+    Args:
+        limit: Maximum number of session memories to load (default: 1)
+    """
+    try:
+        url = f"{_get_http_url()}/load?limit={limit}"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                content = result.get("content", [])
+                if content:
+                    print(f"📖 Loaded {len(content)} session memories:")
+                    for i, item in enumerate(content):
+                        print(f"  {i+1}. {item}")
+                    return content
+                else:
+                    print("No session memories found")
+                    return []
+            else:
+                print(f"❌ Failed to load session memory: {result.get('message', 'Unknown error')}")
+                return []
+    except Exception as e:
+        print(f"Error loading session memory: {e}")
+        return []
+
 def correct(wrong_info: str, correct_info: str = None):
     """
     Correct inaccurate information by marking it to be forgotten and 
@@ -441,6 +477,7 @@ r = remember  # Shortcut for storing important information
 f = forget    # Shortcut for marking information to forget
 i = ignore    # Shortcut for ignoring information in current context
 w = write     # Shortcut for writing session memory
+l = load      # Shortcut for loading session memory
 c = compartment # Shortcut for compartmentalizing memory
 k = keep      # Shortcut for keeping memory for specific duration
 cx = correct  # Shortcut for correcting misinformation
@@ -460,6 +497,10 @@ if __name__ == "__main__":
             ignore(sys.argv[2])
         elif command == "write" and len(sys.argv) > 2:
             write(sys.argv[2])
+        elif command == "load":
+            # Optional second parameter for limit
+            limit = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+            load(limit)
         elif command == "compartment" and len(sys.argv) > 2:
             compartment(sys.argv[2])
         elif command == "keep" and len(sys.argv) > 2:

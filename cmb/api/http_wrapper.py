@@ -193,6 +193,32 @@ async def write_session_memory(content: str, metadata: str = None):
         logger.error(f"Error writing session memory: {e}")
         return {"status": "error", "message": f"Failed to write session memory: {str(e)}"}
 
+@app.get("/load")
+async def load_session_memory(limit: int = 1):
+    """Load previous session memory."""
+    if memory_service is None:
+        return {"status": "error", "message": "Memory service not initialized"}
+    
+    try:
+        # Search for the most recent session memories
+        results = await memory_service.search(
+            query="",
+            namespace="session",
+            limit=limit
+        )
+        
+        if results.get("count", 0) > 0:
+            return {
+                "success": True,
+                "content": [r.get("content", "") for r in results.get("results", [])],
+                "metadata": [r.get("metadata", {}) for r in results.get("results", [])]
+            }
+        else:
+            return {"success": False, "message": "No session memory found"}
+    except Exception as e:
+        logger.error(f"Error loading session memory: {e}")
+        return {"status": "error", "message": f"Failed to load session memory: {str(e)}"}
+
 @app.get("/compartment/create")
 async def create_compartment(name: str, description: str = None, parent: str = None):
     """Create a new memory compartment."""
