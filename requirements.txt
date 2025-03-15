@@ -10,3 +10,4 @@ bootstrap-flask>=2.3.0  # Primary bootstrap package
 flask-bootstrap>=3.3.7.1  # Alternative bootstrap package
 pandas>=2.0.0
 plotly>=5.18.0
+cryptography>=44.0.0

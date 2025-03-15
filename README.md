@@ -115,6 +115,9 @@ pip install -e .
 # Or start services separately
 ./cmb_start_all  # Memory services only
 ./cmb_web        # Web UI only (requires memory services)
+
+# Launch Claude with memory services and full tool access
+./claude_with_memory  # All-in-one script for Claude Code with memory
 ```
 
 ## Documentation
@@ -123,6 +126,7 @@ pip install -e .
 - [QuickMem Commands](docs/quickmem.md): Ultra-short memory command reference
 - [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
 - [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration
+- [Privacy Guide](docs/privacy.md): Private encrypted memories and security features
 - [Memory Visualization](docs/memory_visualization.md): Web-based UI for browsing and managing memories
 - [Simplified Web UI](docs/simplified_web_ui.md): Lightweight alternative for environments with dependency issues
 - [Claude Integration](docs/claude_integration.md): Automatic startup and memory status checking for Claude sessions
