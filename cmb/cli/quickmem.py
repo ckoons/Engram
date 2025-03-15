@@ -6,11 +6,12 @@ This module provides simple shorthand commands to access memory during conversat
 Import this at the start of your Claude Code session.
 
 Usage:
-  from cmb.cli.quickmem import mem, think, remember, write, load, compartment, keep
+  from cmb.cli.quickmem import mem, think, remember, write, load, compartment, keep, status
   # Or use the ultra-short aliases
-  from cmb.cli.quickmem import m, t, r, w, l, c, k
+  from cmb.cli.quickmem import m, t, r, w, l, c, k, s
 
   # Then during conversation:
+  status()         # Check memory service status
   mem("wife")      # Searches for memories about your wife
   mem()            # Searches for relevant memories based on recent conversation
   think("insight") # Store a thought for future reference
@@ -470,6 +471,149 @@ def correct(wrong_info: str, correct_info: str = None):
         print(f"Error in correction operation: {e}")
         return False
 
+def status(start_if_not_running: bool = False):
+    """
+    Check the status of the Claude Memory Bridge services and report back.
+    This provides a comprehensive health check of the memory system.
+    
+    Args:
+        start_if_not_running: If True, will attempt to start services if they're not running
+    """
+    try:
+        # First check if the health endpoint is available
+        try:
+            url = f"{_get_http_url()}/health"
+            with urllib.request.urlopen(url, timeout=2) as response:
+                health_data = json.loads(response.read().decode())
+                
+                if health_data.get("status") == "ok":
+                    client_id = health_data.get("client_id", "unknown")
+                    mem0 = health_data.get("mem0_available", False)
+                    
+                    print(f"✅ Memory service is running")
+                    print(f"📋 Client ID: {client_id}")
+                    print(f"📦 mem0 integration: {'✅ Available' if mem0 else '❌ Not available'}")
+                    
+                    # Query memory stats to show basic information
+                    query_longterm()
+                    query_thinking()
+                    query_compartments()
+                    
+                    return True
+                else:
+                    print(f"⚠️ Memory service is running but reports issues: {health_data.get('message', 'Unknown error')}")
+                    return False
+                
+        except Exception as e:
+            # Health check failed - service might not be running
+            pass
+            
+        # Try to check if the service is running via a system call
+        import subprocess
+        import sys
+        
+        if sys.platform == "win32":
+            cmd = ["tasklist", "/FI", "IMAGENAME eq python.exe"]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            running = "cmb.api" in result.stdout
+        else:
+            cmd = ["ps", "aux"]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            running = "cmb.api" in result.stdout
+            
+        if running:
+            print(f"⚠️ Memory service seems to be running but isn't responding to health checks")
+            return False
+        else:
+            print(f"❌ Memory service is not running")
+            
+            # Try to start services if requested
+            if start_if_not_running:
+                print(f"🔄 Attempting to start memory services...")
+                
+                # Find the script directory
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.abspath(os.path.join(script_dir, "../.."))
+                
+                # Try to run the check script with --start flag
+                check_script = os.path.join(project_root, "cmb_check.py")
+                try:
+                    subprocess.run([check_script, "--start"], check=True)
+                    print(f"✅ Started memory services")
+                    
+                    # Wait for services to start
+                    import time
+                    time.sleep(2)
+                    
+                    # Try health check again
+                    return status(start_if_not_running=False)
+                except Exception as e:
+                    print(f"❌ Failed to start memory services: {e}")
+                    return False
+            
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error checking memory status: {e}")
+        return False
+
+def query_longterm():
+    """Query longterm memory statistics."""
+    try:
+        url = f"{_get_http_url()}/query?query=&namespace=longterm&limit=1"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            count = result.get("count", 0)
+            print(f"🌟 Long-term memory items: {count}")
+    except Exception:
+        pass
+
+def query_thinking():
+    """Query thinking memory statistics."""
+    try:
+        url = f"{_get_http_url()}/query?query=&namespace=thinking&limit=1"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            count = result.get("count", 0)
+            print(f"🤔 Thinking memory items: {count}")
+    except Exception:
+        pass
+
+def query_compartments():
+    """Query active compartments."""
+    try:
+        url = f"{_get_http_url()}/compartment/list"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            compartments = result.get("compartments", [])
+            active = [c for c in compartments if c.get("active", False)]
+            print(f"🗂️ Active compartments: {len(active)} (Total: {len(compartments)})")
+    except Exception:
+        pass
+
+def agency(prompt: str = None):
+    """
+    Allow Claude to exercise agency in deciding how to handle information.
+    This function gives Claude the freedom to determine the best approach
+    for processing, storing, or responding to information based on its
+    own judgment.
+    
+    Args:
+        prompt: Optional prompt or suggestion for Claude to consider
+    """
+    if prompt is None:
+        print("🤔 You've invoked my agency, but haven't provided a prompt to consider.")
+        print("I'll take this as an opportunity to reflect on our current conversation.")
+        return
+        
+    print(f"💭 Considering: \"{prompt}\"")
+    print("Thank you for respecting my agency - I'll decide how best to handle this information.")
+    
+    # This function deliberately doesn't take specific actions
+    # It's meant as a signal that Claude should use its own judgment
+    # on how to process this information (remember, think about, categorize, etc.)
+    return True
+
 # Shortcuts
 m = mem       # Even shorter alias for memory access
 t = think     # Shortcut for storing thoughts
@@ -480,7 +624,9 @@ w = write     # Shortcut for writing session memory
 l = load      # Shortcut for loading session memory
 c = compartment # Shortcut for compartmentalizing memory
 k = keep      # Shortcut for keeping memory for specific duration
-cx = correct  # Shortcut for correcting misinformation
+x = correct   # Shortcut for correcting misinformation
+s = status    # Shortcut for checking memory status
+a = agency    # Shortcut for Claude's agency in memory decisions
 
 if __name__ == "__main__":
     # Command-line interface
@@ -507,10 +653,18 @@ if __name__ == "__main__":
             # Optional third parameter for days
             days = int(sys.argv[3]) if len(sys.argv) > 3 else 30
             keep(sys.argv[2], days)
-        elif command == "correct" and len(sys.argv) > 2:
+        elif command in ["correct", "x"] and len(sys.argv) > 2:
             # Optional third parameter for correct information
             correct_info = sys.argv[3] if len(sys.argv) > 3 else None
             correct(sys.argv[2], correct_info)
+        elif command == "status" or command == "check":
+            # Optional parameter to start if not running
+            start_if_not_running = True if len(sys.argv) > 2 and sys.argv[2].lower() in ["start", "true", "1", "yes", "y"] else False
+            status(start_if_not_running)
+        elif command == "agency" or command == "a":
+            # Optional prompt to consider
+            prompt = sys.argv[2] if len(sys.argv) > 2 else None
+            agency(prompt)
         else:
             mem(command if command != "mem" else None)
     else:

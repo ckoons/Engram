@@ -32,7 +32,8 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
   - Web-based visualization and management UI
 
 - **Simple Interface**:
-  - Ultra-short commands with QuickMem (m, t, r, w, c, k)
+  - Ultra-short commands with QuickMem (m, t, r, w, c, k, s)
+  - Automatic service health checking and startup
   - Lightweight Python helper for Claude to access memories
   - Minimal dependencies, easy to run anywhere
   - Cross-session persistence with vector search
@@ -48,8 +49,14 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 # Start both the memory bridge and HTTP services
 ./cmb_start_all
 
+# OR use the cmb_check script to check status and start services
+./cmb_check.py --start
+
 # In your Claude session, access memories with QuickMem:
-from cmb.cli.quickmem import m, t, r, w, c, k, cx
+from cmb.cli.quickmem import m, t, r, w, c, k, x, s, a
+
+# Check memory service status (and start if needed with s(True))
+s()
 
 # Check memories about a topic
 m("project")
@@ -70,7 +77,10 @@ w("Today we worked on implementing compartmentalized memory")
 k("memory_id_123")
 
 # Correct misinformation
-cx("Casey lives in San Francisco", "Casey lives in Seattle")
+x("Casey lives in San Francisco", "Casey lives in Seattle")
+
+# Use Claude's agency for memory decisions
+a("Should I categorize this project information?")
 ```
 
 ## Installation
@@ -106,6 +116,7 @@ pip install -e .
 - [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration
 - [Memory Visualization](docs/memory_visualization.md): Web-based UI for browsing and managing memories
 - [Simplified Web UI](docs/simplified_web_ui.md): Lightweight alternative for environments with dependency issues
+- [Claude Integration](docs/claude_integration.md): Automatic startup and memory status checking for Claude sessions
 - [Future Enhancements](docs/future_enhancements.md): Planned features and improvements
 
 ## Contributing

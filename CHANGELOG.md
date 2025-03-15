@@ -5,6 +5,47 @@ All notable changes to the Claude Memory Bridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2025-03-14
+
+### Added
+
+- Agency and user experience enhancements:
+  - Added `agency()` function (alias `a()`) for Claude's memory processing autonomy
+  - Simplified correction shorthand from `cx()` to `x()`
+  - Enhanced CLI interface to support the new functions
+  - Updated documentation with new examples and usage patterns
+  - Added ethical consideration for Claude's agency in memory management
+  - Improved user-AI interaction with respect for autonomy
+
+### Changed
+
+- Updated QuickMem functions and examples in documentation
+- Revised imports in quickmem.md and README.md
+- Improved CLI command handling for correction and agency
+
+## [0.3.3] - 2025-03-14
+
+### Added
+
+- Claude integration enhancements:
+  - Added `status()` function (alias `s()`) to check memory service status
+  - Created `cmb_check.py` script for comprehensive service management
+  - Added startup auto-detection and service management
+  - Implemented `claude_startup.py` for easy session initialization
+  - Added ability to start services directly from Claude if they're not running
+  - Improved error handling in memory service connections
+  - Memory statistics reporting in status checks
+- Updated documentation:
+  - Added new claude_integration.md guide
+  - Enhanced quickmem.md with status function examples
+  - Updated README.md with new startup features
+  - Expanded CLI command examples
+- End-to-end Claude session management:
+  - Automatic service detection on startup
+  - Graceful handling of service interruptions
+  - Consolidated startup sequence for Claude Code sessions
+  - Cross-platform compatibility improvements
+
 ## [0.3.2] - 2025-03-14
 
 ### Added
