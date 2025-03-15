@@ -97,6 +97,24 @@ def check_services(quickmem):
         print(f"{RED}Error checking memory services: {e}{RESET}")
         return False
 
+def auto_load_memories(quickmem, limit=3):
+    """Automatically load previous session memories."""
+    try:
+        memories = quickmem.load(limit)
+        if memories:
+            print(f"\n{GREEN}✅ Successfully loaded {len(memories)} previous session memories{RESET}")
+            
+            # Add default reflective thought
+            quickmem.think("Starting a new session with loaded memories. I'll maintain continuity from previous sessions.")
+            
+            return memories
+        else:
+            print(f"\n{YELLOW}No previous session memories found to load{RESET}")
+            return []
+    except Exception as e:
+        print(f"{YELLOW}Error loading memories: {e}{RESET}")
+        return []
+
 def main():
     """Main entry point."""
     print(f"\n{BOLD}{BLUE}===== Claude Memory Bridge Startup ====={RESET}\n")
@@ -125,6 +143,9 @@ def main():
         globals()['keep'] = quickmem.keep
         globals()['correct'] = quickmem.correct
         globals()['status'] = quickmem.status
+        globals()['agency'] = quickmem.agency
+        globals()['private'] = quickmem.private
+        globals()['review_private'] = quickmem.review_private
         
         # Short aliases
         globals()['m'] = quickmem.m
@@ -136,8 +157,14 @@ def main():
         globals()['l'] = quickmem.l
         globals()['c'] = quickmem.c
         globals()['k'] = quickmem.k
-        globals()['cx'] = quickmem.cx
+        globals()['x'] = quickmem.x
         globals()['s'] = quickmem.s
+        globals()['a'] = quickmem.a
+        globals()['p'] = quickmem.p
+        globals()['v'] = quickmem.v
+        
+        # Auto-load previous memories
+        auto_load_memories(quickmem)
         
         print(f"{GREEN}✅ Memory functions are now available!{RESET}")
         print(f"{BLUE}Use m() to search memories, t() to store thoughts, r() to remember important info...{RESET}")

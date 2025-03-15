@@ -18,7 +18,7 @@ CMB_STARTUP="$CMB_DIR/cmb_start_all"
 CMB_HTTP="$CMB_DIR/cmb_http"
 
 # Memory import for Claude
-MEMORY_IMPORT="from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v; print(\"${GREEN}💭 Memory functions loaded!${RESET}\"); status = s(); print(\"\")"
+MEMORY_IMPORT="from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v; print(\"${GREEN}💭 Memory functions loaded!${RESET}\"); status = s(); previous = l(3); print(\"\")"
 
 # Function to check if CMB is running
 check_cmb_running() {
@@ -93,6 +93,5 @@ echo -e "${YELLOW}Claude will have unrestricted access to Bash and other tools${
 
 # Use the allowed tools parameter to give Claude full access
 # -e flag executes the Python code before starting the session
-claude --allowedTools "Bash(*),Edit,View,Replace,BatchTool,GlobTool,GrepTool,LS,ReadNotebook,NotebookEditCell,WebFetchTool" -e "$MEMORY_IMPORT"
-
+echo "$MEMORY_IMPORT" | claude --allowedTools="Bash(*),Edit,View,Replace,BatchTool,GlobTool,GrepTool,LS,ReadNotebook,NotebookEditCell,WebFetchTool"
 echo -e "${BLUE}${BOLD}====== Claude session ended ======${RESET}"

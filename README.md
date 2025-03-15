@@ -48,6 +48,19 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 
 ## Quick Start
 
+### Option 1: Automatic Memory Loading (Recommended)
+
+```bash
+# Launch Claude with all memory services pre-configured
+./claude_with_memory
+
+# OR use the simplified starter in Claude Code session
+from claude_memory_start import start_memory
+start_memory("Project Work Session")  # Loads memories and starts session
+```
+
+### Option 2: Manual Memory Loading
+
 ```bash
 # Start both the memory bridge and HTTP services
 ./cmb_start_all
@@ -56,11 +69,25 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 ./cmb_check.py --start
 
 # In your Claude session, access memories with QuickMem:
-from cmb.cli.quickmem import m, t, r, w, c, k, x, s, a, p, v
+from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
 
+# Auto-load previous memories and start session in one command
+o()
+
+# Or step by step:
 # Check memory service status (and start if needed with s(True))
 s()
 
+# Load previous session memories
+l()
+
+# Start a new session
+b("Project Work Session")
+```
+
+### Memory Commands
+
+```bash
 # Check memories about a topic
 m("project")
 
@@ -90,6 +117,9 @@ p("My private analysis of the current project direction")
 
 # View private memories
 v()
+
+# End session with summary
+e("Completed memory integration with auto-loading")
 ```
 
 ## Installation

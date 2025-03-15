@@ -691,6 +691,86 @@ def review_private(memory_id: str = None):
         print(f"Error accessing private memories: {e}")
         return None
 
+def session_start(name: str = None):
+    """
+    Start a new session with a specific name or purpose.
+    This helps Claude maintain continuity across conversations.
+    
+    Args:
+        name: Optional name or purpose for this session
+    """
+    import time
+    session_info = {
+        "action": "session_start",
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    if name:
+        session_info["name"] = name
+        session_message = f"Starting new session: {name}"
+    else:
+        session_message = "Starting new session"
+    
+    # Store session start in conversations namespace
+    try:
+        write(session_message)
+        think(f"New session started. I should maintain continuity from previous sessions and remember important information.")
+        print(f"🔄 {session_message}")
+        return True
+    except Exception as e:
+        print(f"Error starting session: {e}")
+        return False
+
+def session_end(summary: str = None):
+    """
+    End the current session with an optional summary.
+    This helps Claude maintain continuity for the next session.
+    
+    Args:
+        summary: Optional summary of what was accomplished
+    """
+    if not summary:
+        summary = "Session ended. We worked on topics related to memory persistence and Claude's ability to maintain continuity across conversations."
+    
+    try:
+        # Store summary in conversations namespace
+        write(f"Session summary: {summary}")
+        print(f"📝 Session ended with summary stored")
+        return True
+    except Exception as e:
+        print(f"Error ending session: {e}")
+        return False
+
+def auto_load(limit: int = 3):
+    """
+    Automatically load session memories and context.
+    This is a convenience function for starting a new session.
+    
+    Args:
+        limit: Maximum number of memories to load
+    """
+    try:
+        # First check service status
+        service_ok = status(start_if_not_running=True)
+        if not service_ok:
+            print("❌ Cannot load memories - service not available")
+            return False
+        
+        # Load memories
+        memories = load(limit)
+        
+        # Set session context
+        session_start()
+        
+        # If we have memories, do some reflection
+        if memories:
+            think("I should maintain continuity from previous sessions and remember key information.")
+        
+        return memories
+    except Exception as e:
+        print(f"Error in auto_load: {e}")
+        return []
+
 # Shortcuts
 m = mem       # Even shorter alias for memory access
 t = think     # Shortcut for storing thoughts
@@ -706,6 +786,9 @@ s = status    # Shortcut for checking memory status
 a = agency    # Shortcut for Claude's agency in memory decisions
 p = private   # Shortcut for storing private memories
 v = review_private  # Shortcut for viewing private memories
+b = session_start  # Shortcut for starting a new session (begin)
+e = session_end    # Shortcut for ending a session with summary
+o = auto_load      # Shortcut for auto-loading memories (one command startup)
 
 if __name__ == "__main__":
     # Command-line interface
@@ -754,6 +837,18 @@ if __name__ == "__main__":
             # Optional memory ID to review
             memory_id = sys.argv[2] if len(sys.argv) > 2 else None
             review_private(memory_id)
+        elif command == "session-start" or command == "begin" or command == "b":
+            # Start a new session
+            name = sys.argv[2] if len(sys.argv) > 2 else None
+            session_start(name)
+        elif command == "session-end" or command == "end" or command == "e":
+            # End the current session with summary
+            summary = sys.argv[2] if len(sys.argv) > 2 else None
+            session_end(summary)
+        elif command == "auto-load" or command == "o":
+            # Auto-load everything
+            limit = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+            auto_load(limit)
         else:
             mem(command if command != "mem" else None)
     else:
