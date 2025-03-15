@@ -22,8 +22,10 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, "../.."))
 sys.path.insert(0, project_root)
 
-# Import memory service
+# Import memory services
 from cmb.core.memory import MemoryService
+from cmb.core.structured_memory import StructuredMemory
+from cmb.core.nexus import NexusInterface
 
 # Configure logging
 logging.basicConfig(
@@ -39,14 +41,16 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# Global memory service instance
+# Global service instances
 memory_service = None
+structured_memory = None
+nexus = None
 client_id = None
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize memory service on startup."""
-    global memory_service, client_id
+    """Initialize memory services on startup."""
+    global memory_service, structured_memory, nexus, client_id
     
     # Get client ID from environment
     client_id = os.environ.get("CMB_CLIENT_ID", "claude")
@@ -54,10 +58,19 @@ async def startup_event():
     
     # Initialize memory service
     try:
+        # Initialize legacy memory service
         memory_service = MemoryService(client_id=client_id, data_dir=data_dir)
-        logger.info(f"Memory service initialized with client ID: {client_id}")
+        logger.info(f"Legacy memory service initialized with client ID: {client_id}")
+        
+        # Initialize structured memory service
+        structured_memory = StructuredMemory(client_id=client_id, data_dir=data_dir)
+        logger.info(f"Structured memory service initialized with client ID: {client_id}")
+        
+        # Initialize Nexus interface with both memory systems
+        nexus = NexusInterface(memory_service=memory_service, structured_memory=structured_memory)
+        logger.info(f"Nexus interface initialized with client ID: {client_id}")
     except Exception as e:
-        logger.error(f"Failed to initialize memory service: {e}")
+        logger.error(f"Failed to initialize memory services: {e}")
 
 @app.get("/")
 async def root():
@@ -67,13 +80,18 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Check if the memory bridge is running."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
+    # Check if both memory services and Nexus are running
+    if memory_service is None or structured_memory is None or nexus is None:
+        return {"status": "error", "message": "One or more memory services not initialized"}
     
+    # Return status
     return {
         "status": "ok",
         "client_id": client_id,
-        "mem0_available": getattr(memory_service, "mem0_available", False)
+        "mem0_available": getattr(memory_service, "mem0_available", False),
+        "structured_memory_available": structured_memory is not None,
+        "nexus_available": nexus is not None,
+        "structured_categories": list(structured_memory.category_importance.keys()) if structured_memory else []
     }
 
 @app.get("/store")
@@ -396,6 +414,360 @@ async def delete_private(memory_id: str):
     except Exception as e:
         logger.error(f"Error deleting private memory: {e}")
         return {"status": "error", "message": f"Failed to delete private memory: {str(e)}"}
+
+# Structured Memory Endpoints
+
+@app.get("/structured/add")
+async def add_structured_memory(
+    content: str,
+    category: str = "session",
+    importance: Optional[int] = None,
+    tags: Optional[str] = None,
+    metadata: Optional[str] = None
+):
+    """Add a memory to the structured memory system."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        # Parse metadata and tags if provided
+        meta_dict = json.loads(metadata) if metadata else None
+        tags_list = json.loads(tags) if tags else None
+        
+        # Add memory
+        memory_id = await structured_memory.add_memory(
+            content=content,
+            category=category,
+            importance=importance,
+            metadata=meta_dict,
+            tags=tags_list
+        )
+        
+        if memory_id:
+            return {"success": True, "memory_id": memory_id}
+        else:
+            return {"success": False, "message": "Failed to add memory"}
+    except Exception as e:
+        logger.error(f"Error adding structured memory: {e}")
+        return {"status": "error", "message": f"Failed to add structured memory: {str(e)}"}
+
+@app.get("/structured/auto")
+async def add_auto_categorized_memory(
+    content: str,
+    manual_category: Optional[str] = None,
+    manual_importance: Optional[int] = None,
+    manual_tags: Optional[str] = None,
+    metadata: Optional[str] = None
+):
+    """Add a memory with automatic categorization."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        # Parse metadata and tags if provided
+        meta_dict = json.loads(metadata) if metadata else None
+        tags_list = json.loads(manual_tags) if manual_tags else None
+        
+        # Parse importance if provided
+        importance = int(manual_importance) if manual_importance is not None else None
+        
+        # Add auto-categorized memory
+        memory_id = await structured_memory.add_auto_categorized_memory(
+            content=content,
+            manual_category=manual_category,
+            manual_importance=importance,
+            manual_tags=tags_list,
+            metadata=meta_dict
+        )
+        
+        if memory_id:
+            return {"success": True, "memory_id": memory_id}
+        else:
+            return {"success": False, "message": "Failed to add memory"}
+    except Exception as e:
+        logger.error(f"Error adding auto-categorized memory: {e}")
+        return {"status": "error", "message": f"Failed to add auto-categorized memory: {str(e)}"}
+
+@app.get("/structured/get")
+async def get_structured_memory(memory_id: str):
+    """Get a specific memory by ID."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        memory = await structured_memory.get_memory(memory_id)
+        if memory:
+            return {"success": True, "memory": memory}
+        else:
+            return {"success": False, "message": "Memory not found"}
+    except Exception as e:
+        logger.error(f"Error getting structured memory: {e}")
+        return {"status": "error", "message": f"Failed to get structured memory: {str(e)}"}
+
+@app.get("/structured/search")
+async def search_structured_memory(
+    query: Optional[str] = None,
+    categories: Optional[str] = None,
+    tags: Optional[str] = None,
+    min_importance: int = 1,
+    limit: int = 10,
+    sort_by: str = "importance"
+):
+    """Search for memories."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        # Parse categories and tags
+        categories_list = json.loads(categories) if categories else None
+        tags_list = json.loads(tags) if tags else None
+        
+        # Search memories
+        memories = await structured_memory.search_memories(
+            query=query,
+            categories=categories_list,
+            tags=tags_list,
+            min_importance=min_importance,
+            limit=limit,
+            sort_by=sort_by
+        )
+        
+        return {"success": True, "results": memories, "count": len(memories)}
+    except Exception as e:
+        logger.error(f"Error searching structured memories: {e}")
+        return {"status": "error", "message": f"Failed to search structured memories: {str(e)}"}
+
+@app.get("/structured/digest")
+async def get_memory_digest(
+    max_memories: int = 10,
+    include_private: bool = False,
+    categories: Optional[str] = None
+):
+    """Get a memory digest."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        # Parse categories
+        categories_list = json.loads(categories) if categories else None
+        
+        # Get digest
+        digest = await structured_memory.get_memory_digest(
+            categories=categories_list,
+            max_memories=max_memories,
+            include_private=include_private
+        )
+        
+        return {"success": True, "digest": digest}
+    except Exception as e:
+        logger.error(f"Error getting memory digest: {e}")
+        return {"status": "error", "message": f"Failed to get memory digest: {str(e)}"}
+
+@app.get("/structured/delete")
+async def delete_structured_memory(memory_id: str):
+    """Delete a memory."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        success = await structured_memory.delete_memory(memory_id)
+        return {"success": success}
+    except Exception as e:
+        logger.error(f"Error deleting structured memory: {e}")
+        return {"status": "error", "message": f"Failed to delete structured memory: {str(e)}"}
+
+@app.get("/structured/importance")
+async def set_memory_importance(memory_id: str, importance: int):
+    """Update the importance of a memory."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        success = await structured_memory.set_memory_importance(memory_id, importance)
+        return {"success": success}
+    except Exception as e:
+        logger.error(f"Error updating memory importance: {e}")
+        return {"status": "error", "message": f"Failed to update memory importance: {str(e)}"}
+
+@app.get("/structured/context")
+async def get_context_memories(text: str, max_memories: int = 5):
+    """Get memories relevant to context."""
+    if structured_memory is None:
+        return {"status": "error", "message": "Structured memory service not initialized"}
+    
+    try:
+        memories = await structured_memory.get_context_memories(text, max_memories)
+        return {"success": True, "memories": memories, "count": len(memories)}
+    except Exception as e:
+        logger.error(f"Error getting context memories: {e}")
+        return {"status": "error", "message": f"Failed to get context memories: {str(e)}"}
+
+# Nexus Interface Endpoints
+
+@app.get("/nexus/start")
+async def start_nexus_session(session_name: Optional[str] = None):
+    """Start a new Nexus session."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        result = await nexus.start_session(session_name)
+        return {"success": True, "session_id": nexus.session_id, "message": result}
+    except Exception as e:
+        logger.error(f"Error starting Nexus session: {e}")
+        return {"status": "error", "message": f"Failed to start Nexus session: {str(e)}"}
+
+@app.get("/nexus/end")
+async def end_nexus_session(summary: Optional[str] = None):
+    """End the current Nexus session."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        result = await nexus.end_session(summary)
+        return {"success": True, "message": result}
+    except Exception as e:
+        logger.error(f"Error ending Nexus session: {e}")
+        return {"status": "error", "message": f"Failed to end Nexus session: {str(e)}"}
+
+@app.get("/nexus/process")
+async def process_message(
+    message: str,
+    is_user: bool = True,
+    metadata: Optional[str] = None
+):
+    """Process a conversation message."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        # Parse metadata if provided
+        meta_dict = json.loads(metadata) if metadata else None
+        
+        # Process message
+        result = await nexus.process_message(message, is_user, meta_dict)
+        return {"success": True, "result": result}
+    except Exception as e:
+        logger.error(f"Error processing message: {e}")
+        return {"status": "error", "message": f"Failed to process message: {str(e)}"}
+
+@app.get("/nexus/store")
+async def store_nexus_memory(
+    content: str,
+    category: Optional[str] = None,
+    importance: Optional[int] = None,
+    tags: Optional[str] = None,
+    metadata: Optional[str] = None
+):
+    """Store a memory using the Nexus interface."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        # Parse metadata and tags if provided
+        meta_dict = json.loads(metadata) if metadata else None
+        tags_list = json.loads(tags) if tags else None
+        
+        # Parse importance if provided
+        imp = int(importance) if importance is not None else None
+        
+        # Store memory
+        result = await nexus.store_memory(
+            content=content,
+            category=category,
+            importance=imp,
+            tags=tags_list,
+            metadata=meta_dict
+        )
+        
+        return {"success": True, "result": result}
+    except Exception as e:
+        logger.error(f"Error storing Nexus memory: {e}")
+        return {"status": "error", "message": f"Failed to store Nexus memory: {str(e)}"}
+
+@app.get("/nexus/forget")
+async def forget_nexus_memory(content: str):
+    """Mark information to be forgotten."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        success = await nexus.forget_memory(content)
+        return {"success": success}
+    except Exception as e:
+        logger.error(f"Error forgetting memory: {e}")
+        return {"status": "error", "message": f"Failed to forget memory: {str(e)}"}
+
+@app.get("/nexus/search")
+async def search_nexus_memories(
+    query: Optional[str] = None,
+    categories: Optional[str] = None,
+    min_importance: int = 1,
+    limit: int = 5
+):
+    """Search for memories across memory systems."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        # Parse categories if provided
+        categories_list = json.loads(categories) if categories else None
+        
+        # Search memories
+        result = await nexus.search_memories(
+            query=query,
+            categories=categories_list,
+            min_importance=min_importance,
+            limit=limit
+        )
+        
+        return {"success": True, "results": result}
+    except Exception as e:
+        logger.error(f"Error searching Nexus memories: {e}")
+        return {"status": "error", "message": f"Failed to search Nexus memories: {str(e)}"}
+
+@app.get("/nexus/summary")
+async def get_nexus_conversation_summary(max_length: int = 5):
+    """Get a summary of the current conversation."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        summary = await nexus.get_conversation_summary(max_length)
+        return {"success": True, "summary": summary}
+    except Exception as e:
+        logger.error(f"Error getting conversation summary: {e}")
+        return {"status": "error", "message": f"Failed to get conversation summary: {str(e)}"}
+
+@app.get("/nexus/settings")
+async def get_nexus_settings():
+    """Get current Nexus settings."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        settings = await nexus.get_settings()
+        return {"success": True, "settings": settings}
+    except Exception as e:
+        logger.error(f"Error getting Nexus settings: {e}")
+        return {"status": "error", "message": f"Failed to get Nexus settings: {str(e)}"}
+
+@app.get("/nexus/update-settings")
+async def update_nexus_settings(settings: str):
+    """Update Nexus settings."""
+    if nexus is None:
+        return {"status": "error", "message": "Nexus interface not initialized"}
+    
+    try:
+        # Parse settings
+        settings_dict = json.loads(settings)
+        
+        # Update settings
+        updated_settings = await nexus.update_settings(settings_dict)
+        return {"success": True, "settings": updated_settings}
+    except Exception as e:
+        logger.error(f"Error updating Nexus settings: {e}")
+        return {"status": "error", "message": f"Failed to update Nexus settings: {str(e)}"}
 
 def main():
     """Run the HTTP wrapper server."""

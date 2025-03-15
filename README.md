@@ -12,19 +12,29 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 - Bridge context across different projects
 - Organize memories in compartments
 - Control memory expiration
+- Automatically categorize and rank memory importance
 
 ## Features
 
-- **Multiple Memory Namespaces**:
-  - `conversations`: Store and recall dialog history
-  - `thinking`: Preserve Claude's reasoning processes
-  - `longterm`: Maintain high-priority facts and insights
+- **Balanced Memory System**:
+  - **Structured Memory**: File-based storage with categorized organization
+  - **Memory Importance Ranking**: 1-5 scale with prioritized retrieval
+  - **Enhanced Retrieval**: Context-aware memory loading
+  - **Nexus Interface**: Standardized API for memory-enabled AI assistants
+
+- **Multiple Memory Categories**:
+  - `personal`: Store user personal information (highest importance)
   - `projects`: Connect context across different workspaces
-  - `compartments`: Organize memories by topic or project
+  - `facts`: Maintain general factual information
+  - `preferences`: Remember user preferences and settings
   - `session`: Persist memories between conversations
   - `private`: Encrypted memories only Claude can access
 
 - **Advanced Memory Management**:
+  - Auto-categorization of memories based on content analysis
+  - Memory digests with formatted summaries of important information
+  - Context enrichment for conversations with relevant memories
+  - Unified search across memory systems
   - Memory compartmentalization for organization
   - Session persistence for cross-conversation memory
   - Time-based memory expiration control
@@ -34,7 +44,7 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
   - Web-based visualization and management UI
 
 - **Simple Interface**:
-  - Ultra-short commands with QuickMem (m, t, r, w, c, k, s, a, p, v)
+  - Ultra-short commands with QuickMem (m, t, r, w, c, k, s, a, p, v, d, n, q, y, z)
   - Agency and privacy respecting design
   - Automatic service health checking and startup
   - Lightweight Python helper for Claude to access memories
@@ -87,6 +97,8 @@ b("Project Work Session")
 
 ### Memory Commands
 
+#### Basic Memory Operations
+
 ```bash
 # Check memories about a topic
 m("project")
@@ -122,6 +134,25 @@ v()
 e("Completed memory integration with auto-loading")
 ```
 
+#### Structured Memory & Nexus Commands
+
+```bash
+# Get a formatted digest of important memories
+await d(max_memories=10, include_private=False)
+
+# Start a Nexus session with memory enrichment
+await n("Project Discussion Session")
+
+# Process a message with memory context
+await q("Let's discuss the structured memory implementation", is_user=True)
+
+# Store memory with auto-categorization
+await z("The structured memory system uses importance levels from 1 to 5")
+
+# End a Nexus session with summary
+await y("Completed work on structured memory implementation")
+```
+
 ## Installation
 
 ```bash
@@ -154,6 +185,7 @@ pip install -e .
 
 - [Usage Guide](docs/usage.md): Basic usage instructions and examples
 - [QuickMem Commands](docs/quickmem.md): Ultra-short memory command reference
+- [Structured Memory](docs/structured_memory.md): Balanced memory system with importance ranking
 - [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
 - [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration
 - [Privacy Guide](docs/privacy.md): Private encrypted memories and security features

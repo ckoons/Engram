@@ -771,6 +771,133 @@ def auto_load(limit: int = 3):
         print(f"Error in auto_load: {e}")
         return []
 
+# Structured memory and Nexus functions
+
+async def memory_digest(max_memories: int = 10, include_private: bool = False):
+    """
+    Generate a formatted digest of important memories.
+    
+    Args:
+        max_memories: Maximum memories to include
+        include_private: Whether to include private memories
+    """
+    try:
+        url = f"{_get_http_url()}/structured/digest?max_memories={max_memories}&include_private={include_private}"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                digest = result.get("digest", "")
+                print(digest)
+                return digest
+            else:
+                print(f"❌ Failed to get memory digest: {result.get('message', 'Unknown error')}")
+                return None
+    except Exception as e:
+        print(f"Error getting memory digest: {e}")
+        return None
+
+async def start_nexus(session_name: str = None):
+    """
+    Start a new Nexus session with memory enrichment.
+    
+    Args:
+        session_name: Optional name for this session
+    """
+    try:
+        url = f"{_get_http_url()}/nexus/start"
+        if session_name:
+            url += f"?session_name={_safe_string(session_name)}"
+            
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                message = result.get("message", "")
+                print(f"🌐 Nexus session started")
+                print(message)
+                return message
+            else:
+                print(f"❌ Failed to start Nexus session: {result.get('message', 'Unknown error')}")
+                return None
+    except Exception as e:
+        print(f"Error starting Nexus session: {e}")
+        return None
+
+async def process_message(message: str, is_user: bool = True):
+    """
+    Process a conversation message through Nexus.
+    
+    Args:
+        message: The message content
+        is_user: Whether this is a user message (True) or assistant message (False)
+    """
+    try:
+        url = f"{_get_http_url()}/nexus/process?message={_safe_string(message)}&is_user={is_user}"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                context = result.get("result", "")
+                if context:
+                    print(f"\n🧠 Enhanced with relevant memories")
+                return context
+            else:
+                print(f"❌ Failed to process message: {result.get('message', 'Unknown error')}")
+                return message
+    except Exception as e:
+        print(f"Error processing message: {e}")
+        return message
+
+async def auto_remember(content: str):
+    """
+    Store a memory with automatic categorization and importance.
+    
+    Args:
+        content: The content to remember
+    """
+    try:
+        url = f"{_get_http_url()}/structured/auto?content={_safe_string(content)}"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                memory_id = result.get("memory_id", "")
+                print(f"🧠 Remembered with automatic categorization")
+                return memory_id
+            else:
+                print(f"❌ Failed to auto-remember: {result.get('message', 'Unknown error')}")
+                return None
+    except Exception as e:
+        print(f"Error auto-remembering: {e}")
+        return None
+
+async def end_nexus(summary: str = None):
+    """
+    End the current Nexus session with an optional summary.
+    
+    Args:
+        summary: Optional summary of what was accomplished
+    """
+    try:
+        url = f"{_get_http_url()}/nexus/end"
+        if summary:
+            url += f"?summary={_safe_string(summary)}"
+            
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                message = result.get("message", "")
+                print(f"🌐 Nexus session ended: {message}")
+                return message
+            else:
+                print(f"❌ Failed to end Nexus session: {result.get('message', 'Unknown error')}")
+                return None
+    except Exception as e:
+        print(f"Error ending Nexus session: {e}")
+        return None
+
 # Shortcuts
 m = mem       # Even shorter alias for memory access
 t = think     # Shortcut for storing thoughts
@@ -789,6 +916,13 @@ v = review_private  # Shortcut for viewing private memories
 b = session_start  # Shortcut for starting a new session (begin)
 e = session_end    # Shortcut for ending a session with summary
 o = auto_load      # Shortcut for auto-loading memories (one command startup)
+
+# Structured memory shortcuts
+d = memory_digest  # Shortcut for getting a memory digest
+n = start_nexus    # Shortcut for starting a Nexus session
+q = process_message # Shortcut for processing a message through Nexus
+y = end_nexus      # Shortcut for ending a Nexus session
+z = auto_remember  # Shortcut for automatic categorized memory storage
 
 if __name__ == "__main__":
     # Command-line interface
@@ -849,6 +983,38 @@ if __name__ == "__main__":
             # Auto-load everything
             limit = int(sys.argv[2]) if len(sys.argv) > 2 else 3
             auto_load(limit)
+        # New structured memory and Nexus commands
+        elif command == "memory-digest" or command == "digest" or command == "d":
+            # Get memory digest
+            max_memories = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+            include_private = True if len(sys.argv) > 3 and sys.argv[3].lower() in ["true", "1", "yes", "y"] else False
+            import asyncio
+            asyncio.run(memory_digest(max_memories, include_private))
+        elif command == "start-nexus" or command == "nexus" or command == "n":
+            # Start Nexus session
+            name = sys.argv[2] if len(sys.argv) > 2 else None
+            import asyncio
+            asyncio.run(start_nexus(name))
+        elif command == "process-message" or command == "process" or command == "q":
+            # Process message through Nexus
+            if len(sys.argv) > 2:
+                is_user = True if len(sys.argv) <= 3 or sys.argv[3].lower() in ["user", "true", "1", "yes", "y"] else False
+                import asyncio
+                asyncio.run(process_message(sys.argv[2], is_user))
+            else:
+                print("❌ Please provide a message to process")
+        elif command == "end-nexus" or command == "y":
+            # End Nexus session
+            summary = sys.argv[2] if len(sys.argv) > 2 else None
+            import asyncio
+            asyncio.run(end_nexus(summary))
+        elif command == "auto-remember" or command == "auto" or command == "z":
+            # Auto-categorize memory
+            if len(sys.argv) > 2:
+                import asyncio
+                asyncio.run(auto_remember(sys.argv[2]))
+            else:
+                print("❌ Please provide content to remember")
         else:
             mem(command if command != "mem" else None)
     else:

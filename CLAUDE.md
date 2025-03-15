@@ -8,11 +8,20 @@ Claude Memory Bridge (CMB) is a project to give Claude persistent memory across 
 2. Enable Claude to store and retrieve its own thoughts
 3. Maintain longterm, high-priority memories
 4. Share context across different projects
+5. Automatically categorize and prioritize information by importance
+6. Provide context-aware memory retrieval for conversations
 
 ## Key Features
 
-- Multiple memory namespaces for different types of information
+- **Balanced Memory System**:
+  - Structured Memory: File-based storage with categorized organization
+  - Memory Importance Ranking: 1-5 scale with prioritized retrieval
+  - Enhanced Retrieval: Context-aware memory loading
+  - Nexus Interface: Standardized API for memory-enabled AI assistants
+- Multiple memory categories (personal, projects, facts, preferences, session, private)
 - Both vector-based (using mem0) and fallback memory implementations
+- Auto-categorization based on content analysis
+- Memory digests for session start context
 - Simple Claude helper interface for store/retrieve operations
 - Easy-to-use CLI for starting the memory service
 
@@ -55,6 +64,8 @@ IMPORTANT: Always include co-authorship credit in the commit message. This prope
 
 ## Common Commands
 
+### Service Management
+
 ```bash
 # Start memory bridge
 cd ~/projects/github/ClaudeMemoryBridge
@@ -62,6 +73,9 @@ cd ~/projects/github/ClaudeMemoryBridge
 
 # With custom client ID
 ./cmb_start.sh --client-id project-x
+
+# Check service status and start if needed
+./cmb_check.py --start
 
 # Run tests
 cd ~/projects/github/ClaudeMemoryBridge
@@ -72,13 +86,65 @@ cd ~/projects/github/ClaudeMemoryBridge
 pip install -e .
 ```
 
+### Structured Memory & Nexus
+
+```python
+# Import Structured Memory core components
+from cmb.core.structured_memory import StructuredMemory
+from cmb.core.nexus import NexusInterface
+from cmb.core.memory import MemoryService
+
+# Initialize components
+memory_service = MemoryService(client_id="claude")
+structured_memory = StructuredMemory(client_id="claude")
+nexus = NexusInterface(memory_service=memory_service, structured_memory=structured_memory)
+
+# Start a Nexus session
+await nexus.start_session("Project Discussion")
+
+# Process a user message with memory enrichment
+enriched_message = await nexus.process_message("Let's discuss structured memory", is_user=True)
+
+# Store a memory with auto-categorization
+await structured_memory.add_auto_categorized_memory(
+    content="The structured memory system has importance levels from 1-5"
+)
+
+# Get a memory digest
+digest = await structured_memory.get_memory_digest(max_memories=10, include_private=False)
+```
+
+### QuickMem Shortcuts
+
+```python
+# Import QuickMem for structured memory and Nexus
+from cmb.cli.quickmem import memory_digest, start_nexus, process_message, auto_remember, end_nexus
+from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+
+# Get memory digest (ultra-short version: d)
+await memory_digest(max_memories=10)
+
+# Start a Nexus session (ultra-short version: n)
+await start_nexus("Project Discussion")
+
+# Process a message (ultra-short version: q)
+await process_message("Let's discuss the structured memory implementation", is_user=True)
+
+# Auto-remember something (ultra-short version: z)
+await auto_remember("The structured memory system uses importance levels from 1 to 5")
+```
+
 ## Future Enhancements
 
-1. Web UI for memory browsing and management
-2. Memory summarization and pruning
-3. Enhanced vector retrieval with better ranking
-4. Multi-user support
+1. Advanced NLP for memory auto-categorization (beyond pattern matching)
+2. Memory embeddings for more accurate context retrieval
+3. Memory pruning and consolidation for older content
+4. Multi-user support with shared memory spaces
 5. Integration with other AI systems beyond Claude
+6. Enhanced web UI for structured memory browsing and visualization
+7. Hierarchical memory organization within categories
+8. Memory federation for sharing across instances 
+9. Conversation topic detection and auto-compartmentalization
 
 ## Deployment Notes
 
