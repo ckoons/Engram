@@ -22,6 +22,7 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
   - `projects`: Connect context across different workspaces
   - `compartments`: Organize memories by topic or project
   - `session`: Persist memories between conversations
+  - `private`: Encrypted memories only Claude can access
 
 - **Advanced Memory Management**:
   - Memory compartmentalization for organization
@@ -29,10 +30,12 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
   - Time-based memory expiration control
   - Hierarchical memory organization
   - Memory correction for handling misinformation
+  - Private encrypted memories with key management
   - Web-based visualization and management UI
 
 - **Simple Interface**:
-  - Ultra-short commands with QuickMem (m, t, r, w, c, k, s)
+  - Ultra-short commands with QuickMem (m, t, r, w, c, k, s, a, p, v)
+  - Agency and privacy respecting design
   - Automatic service health checking and startup
   - Lightweight Python helper for Claude to access memories
   - Minimal dependencies, easy to run anywhere
@@ -53,7 +56,7 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 ./cmb_check.py --start
 
 # In your Claude session, access memories with QuickMem:
-from cmb.cli.quickmem import m, t, r, w, c, k, x, s, a
+from cmb.cli.quickmem import m, t, r, w, c, k, x, s, a, p, v
 
 # Check memory service status (and start if needed with s(True))
 s()
@@ -81,6 +84,12 @@ x("Casey lives in San Francisco", "Casey lives in Seattle")
 
 # Use Claude's agency for memory decisions
 a("Should I categorize this project information?")
+
+# Store private encrypted memory
+p("My private analysis of the current project direction")
+
+# View private memories
+v()
 ```
 
 ## Installation

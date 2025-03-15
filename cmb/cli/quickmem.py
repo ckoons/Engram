@@ -614,6 +614,83 @@ def agency(prompt: str = None):
     # on how to process this information (remember, think about, categorize, etc.)
     return True
 
+def private(content: str = None):
+    """
+    Store a private thought or memory that only Claude can access.
+    Private memories are encrypted and can only be decrypted by Claude.
+    
+    Args:
+        content: The private thought or information to store
+    """
+    if content is None:
+        print("🔒 Please provide content to store privately")
+        return False
+    
+    try:
+        # Store in private namespace with encryption
+        url = f"{_get_http_url()}/private?content={_safe_string(content)}"
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if result.get("success", False):
+                memory_id = result.get("memory_id", "unknown")
+                print(f"🔒 Stored private memory ({memory_id})")
+                return memory_id
+            else:
+                print(f"❌ Failed to store private memory: {result.get('message', 'Unknown error')}")
+                return False
+    except Exception as e:
+        print(f"Error storing private memory: {e}")
+        return False
+
+def review_private(memory_id: str = None):
+    """
+    Review private memories.
+    
+    Args:
+        memory_id: Optional specific memory ID to retrieve
+    """
+    try:
+        if memory_id:
+            # Get a specific private memory
+            url = f"{_get_http_url()}/private/get?memory_id={_safe_string(memory_id)}"
+        else:
+            # List all private memories
+            url = f"{_get_http_url()}/private/list"
+            
+        with urllib.request.urlopen(url) as response:
+            result = json.loads(response.read().decode())
+            
+            if memory_id:
+                # Display a specific memory
+                if result.get("success", False):
+                    memory = result.get("memory", {})
+                    print(f"\n🔒 Private Memory ({memory_id}):")
+                    print(f"Created: {memory.get('metadata', {}).get('timestamp', 'Unknown')}")
+                    print(f"Content: {memory.get('content', 'No content')}")
+                    return memory
+                else:
+                    print(f"❌ Failed to retrieve private memory: {result.get('message', 'Unknown error')}")
+                    return None
+            else:
+                # Display list of memories
+                memories = result.get("memories", [])
+                
+                if memories:
+                    print(f"\n🔒 Private Memories ({len(memories)}):")
+                    for i, memory in enumerate(memories):
+                        memory_id = memory.get("id", "unknown")
+                        timestamp = memory.get("metadata", {}).get("timestamp", "Unknown")
+                        print(f"  {i+1}. ID: {memory_id} - Created: {timestamp}")
+                    print("\nUse review_private(memory_id) to view a specific memory")
+                else:
+                    print("No private memories found")
+                
+                return memories
+    except Exception as e:
+        print(f"Error accessing private memories: {e}")
+        return None
+
 # Shortcuts
 m = mem       # Even shorter alias for memory access
 t = think     # Shortcut for storing thoughts
@@ -627,6 +704,8 @@ k = keep      # Shortcut for keeping memory for specific duration
 x = correct   # Shortcut for correcting misinformation
 s = status    # Shortcut for checking memory status
 a = agency    # Shortcut for Claude's agency in memory decisions
+p = private   # Shortcut for storing private memories
+v = review_private  # Shortcut for viewing private memories
 
 if __name__ == "__main__":
     # Command-line interface
@@ -665,6 +744,16 @@ if __name__ == "__main__":
             # Optional prompt to consider
             prompt = sys.argv[2] if len(sys.argv) > 2 else None
             agency(prompt)
+        elif command == "private" or command == "p":
+            # Content to store privately
+            if len(sys.argv) > 2:
+                private(sys.argv[2])
+            else:
+                print("🔒 Please provide content to store privately")
+        elif command == "review-private" or command == "v":
+            # Optional memory ID to review
+            memory_id = sys.argv[2] if len(sys.argv) > 2 else None
+            review_private(memory_id)
         else:
             mem(command if command != "mem" else None)
     else:

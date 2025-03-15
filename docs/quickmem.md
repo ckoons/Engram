@@ -6,10 +6,10 @@ QuickMem provides ultra-short commands for Claude to access memory in a natural 
 
 ```python
 # Full imports
-from cmb.cli.quickmem import mem, think, remember, write, load, compartment, keep, forget, ignore, correct, status, agency
+from cmb.cli.quickmem import mem, think, remember, write, load, compartment, keep, forget, ignore, correct, status, agency, private, review_private
 
 # Or use the ultra-short aliases
-from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a
+from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v
 ```
 
 ## Memory Functions
@@ -28,6 +28,8 @@ from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a
 | `correct(wrong_info, correct_info)` | `x` | Correct misinformation | `x("Lives in NY", "Lives in Seattle")` |
 | `status(start_if_not_running)` | `s` | Check memory service status | `s()` or `s(True)` |
 | `agency(prompt)` | `a` | Claude's memory agency | `a("Should I remember this detail?")` |
+| `private(content)` | `p` | Store encrypted private memory | `p("My private thought about this project")` |
+| `review_private(memory_id)` | `v` | View private memories | `v()` or `v("memory-id")` |
 
 ## Detailed Usage
 
@@ -134,6 +136,23 @@ a("Should I categorize this in the project compartment or as general knowledge?"
 a()  # Claude will reflect on what's appropriate for the current context
 ```
 
+### Private Memories
+
+```python
+# Store a private memory (encrypted and only accessible to Claude)
+p("My private observation about this project's direction")
+
+# List all private memories (without showing their content)
+v()
+
+# View a specific private memory by ID
+v("private-abc123")
+
+# Delete a private memory (using the HTTP API directly)
+# Note: Custom delete function is not included in standard shortcuts
+# Would require direct API call to /private/delete
+```
+
 ## Default Namespaces
 
 - `conversations`: Everyday dialog and conversation history
@@ -142,6 +161,7 @@ a()  # Claude will reflect on what's appropriate for the current context
 - `projects`: Project-specific information
 - `compartments`: Directory of memory compartments
 - `session`: Cross-conversation memory persistence
+- `private`: Encrypted memories only Claude can access
 - `compartment-XYZ`: Individual compartment contents
 
 ## Command Line Interface
@@ -157,4 +177,8 @@ python -m cmb.cli.quickmem write "Session memory note"
 python -m cmb.cli.quickmem load 5
 python -m cmb.cli.quickmem status start
 python -m cmb.cli.quickmem project  # Search for "project"
+python -m cmb.cli.quickmem agency "Should I store this as important?"
+python -m cmb.cli.quickmem private "This is a private thought"
+python -m cmb.cli.quickmem review-private  # List all private memories
+python -m cmb.cli.quickmem review-private memory-id  # View specific memory
 ```

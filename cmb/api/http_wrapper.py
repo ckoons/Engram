@@ -339,6 +339,64 @@ async def keep_memory(memory_id: str, days: int = 30):
         logger.error(f"Error keeping memory: {e}")
         return {"status": "error", "message": f"Failed to keep memory: {str(e)}"}
 
+@app.get("/private")
+async def store_private(content: str):
+    """Store a private memory."""
+    if memory_service is None:
+        return {"status": "error", "message": "Memory service not initialized"}
+    
+    try:
+        memory_id, success = await memory_service.add_private(content)
+        if success:
+            return {"success": True, "memory_id": memory_id}
+        else:
+            return {"success": False, "message": "Failed to store private memory"}
+    except Exception as e:
+        logger.error(f"Error storing private memory: {e}")
+        return {"status": "error", "message": f"Failed to store private memory: {str(e)}"}
+
+@app.get("/private/get")
+async def get_private(memory_id: str, use_emergency: bool = False):
+    """Get a specific private memory."""
+    if memory_service is None:
+        return {"status": "error", "message": "Memory service not initialized"}
+    
+    try:
+        memory = await memory_service.get_private(memory_id, use_emergency)
+        if memory:
+            return {"success": True, "memory": memory}
+        else:
+            return {"success": False, "message": "Failed to retrieve private memory"}
+    except Exception as e:
+        logger.error(f"Error retrieving private memory: {e}")
+        return {"status": "error", "message": f"Failed to retrieve private memory: {str(e)}"}
+
+@app.get("/private/list")
+async def list_private():
+    """List all private memories."""
+    if memory_service is None:
+        return {"status": "error", "message": "Memory service not initialized"}
+    
+    try:
+        memories = await memory_service.list_private()
+        return {"success": True, "memories": memories}
+    except Exception as e:
+        logger.error(f"Error listing private memories: {e}")
+        return {"status": "error", "message": f"Failed to list private memories: {str(e)}"}
+
+@app.get("/private/delete")
+async def delete_private(memory_id: str):
+    """Delete a private memory."""
+    if memory_service is None:
+        return {"status": "error", "message": "Memory service not initialized"}
+    
+    try:
+        success = await memory_service.delete_private(memory_id)
+        return {"success": success}
+    except Exception as e:
+        logger.error(f"Error deleting private memory: {e}")
+        return {"status": "error", "message": f"Failed to delete private memory: {str(e)}"}
+
 def main():
     """Run the HTTP wrapper server."""
     parser = argparse.ArgumentParser(description="Claude Memory Bridge HTTP Wrapper")

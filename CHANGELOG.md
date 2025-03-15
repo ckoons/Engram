@@ -5,6 +5,35 @@ All notable changes to the Claude Memory Bridge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2025-03-14
+
+### Added
+
+- Privacy and Agency enhancements:
+  - Added private encrypted memory functionality:
+    - `private()` function (alias `p()`) for storing encrypted memories
+    - `review_private()` function (alias `v()`) for viewing private memories
+    - Client-side encryption with primary and emergency keys
+    - Memory-specific key management for enhanced security
+    - Private namespace for encrypted content
+    - Documentation of privacy features
+  - Enhanced Agency function with more detailed guidance
+  - Added crypto.py module with CryptoManager class
+  - Implemented Fernet symmetric encryption for private memories
+  - Created key management system with emergency access
+  - Added HTTP endpoints for private memory management:
+    - /private for storing private memories
+    - /private/get for retrieving a specific memory
+    - /private/list for listing private memories
+    - /private/delete for removing private memories
+
+### Changed
+
+- Updated documentation to reflect privacy capabilities
+- Enhanced README with privacy feature descriptions
+- Added detailed privacy section to quickmem.md
+- Reorganized memory namespaces to include private namespace
+
 ## [0.3.4] - 2025-03-14
 
 ### Added
