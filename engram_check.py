@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Claude Memory Bridge Status Checker
+Engram Status Checker
 
-This script checks the status of Claude Memory Bridge services and provides
+This script checks the status of Engram memory services and provides
 information about running instances, versions, and memory connectivity.
 It can also start, restart, or stop services as needed.
 
 Usage:
-  ./cmb_check.py                      # Check status only
-  ./cmb_check.py --start              # Start services if not running
-  ./cmb_check.py --restart            # Restart services regardless of state
-  ./cmb_check.py --stop               # Stop running services
-  ./cmb_check.py --query "test query" # Test memory query
-  ./cmb_check.py --version-check      # Check for newer versions
+  ./engram_check.py                      # Check status only
+  ./engram_check.py --start              # Start services if not running
+  ./engram_check.py --restart            # Restart services regardless of state
+  ./engram_check.py --stop               # Stop running services
+  ./engram_check.py --query "test query" # Test memory query
+  ./engram_check.py --version-check      # Check for newer versions
 """
 
 import os
@@ -175,16 +175,16 @@ def start_services(client_id: str = "claude", data_dir: str = None, force_restar
     
     # Set up command parameters
     script_path = get_script_path()
-    cmb_start_path = os.path.join(script_path, "cmb_consolidated")
+    engram_start_path = os.path.join(script_path, "engram_consolidated")
     
     # Make sure the script is executable
     try:
-        os.chmod(cmb_start_path, 0o755)
+        os.chmod(engram_start_path, 0o755)
     except Exception:
         pass
     
     # Build command
-    cmd = [cmb_start_path, "--client-id", client_id]
+    cmd = [engram_start_path, "--client-id", client_id]
     if data_dir:
         cmd.extend(["--data-dir", data_dir])
     

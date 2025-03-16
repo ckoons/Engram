@@ -12,6 +12,7 @@ These scripts are intended for regular use:
 | **`engram_consolidated`** | Starts the consolidated memory server | Running just the memory service |
 | **`engram_config`** | Interactive configuration tool | Changing settings or viewing configuration |
 | **`engram_start_web`** | Starts memory service and web UI | Managing memories through a web interface |
+| **`engram_check.py`** | Checks service status | Diagnosing or managing services |
 
 ## Memory Helpers
 

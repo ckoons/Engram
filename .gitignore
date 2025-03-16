@@ -40,7 +40,13 @@ htmlcov/
 
 # Memory files
 .cmb/
+.engram/
 *.memory
+
+# Archive and logs
+archive/
+logs/
+*.log
 
 # OS-specific
 .DS_Store
