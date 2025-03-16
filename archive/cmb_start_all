@@ -1,0 +1,157 @@
+#!/bin/bash
+# Start all Claude Memory Bridge services
+# This script starts both the memory bridge and HTTP wrapper in the background
+
+# Default settings
+KILL_EXISTING=false
+MEMORY_PORT=8000
+HTTP_PORT=8001
+CLIENT_ID="claude"
+DATA_DIR="$HOME/.cmb"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# Color output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --kill|-k)
+      KILL_EXISTING=true
+      shift
+      ;;
+    --client-id)
+      CLIENT_ID="$2"
+      shift 2
+      ;;
+    --memory-port)
+      MEMORY_PORT="$2"
+      shift 2
+      ;;
+    --http-port)
+      HTTP_PORT="$2"
+      shift 2
+      ;;
+    --data-dir)
+      DATA_DIR="$2"
+      shift 2
+      ;;
+    --help|-h)
+      echo -e "${BLUE}Claude Memory Bridge - Start All Services${NC}"
+      echo "Usage: cmb_start_all [options]"
+      echo ""
+      echo "Options:"
+      echo "  --kill, -k          Kill existing processes on memory and HTTP ports"
+      echo "  --client-id <id>    Client ID for memory service (default: claude)"
+      echo "  --memory-port <p>   Port for main memory bridge (default: 8000)"
+      echo "  --http-port <p>     Port for HTTP wrapper (default: 8001)"
+      echo "  --data-dir <dir>    Directory to store memory data (default: ~/.cmb)"
+      echo "  --help, -h          Show this help message"
+      echo ""
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Run with --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
+# Make sure the data directory exists
+mkdir -p "$DATA_DIR"
+
+# Function to check if a port is in use
+port_in_use() {
+  lsof -i ":$1" > /dev/null 2>&1
+  return $?
+}
+
+# Function to kill process running on a port
+kill_on_port() {
+  local PORT=$1
+  local PROCESS_INFO=$(lsof -i ":$PORT" | tail -n 1)
+  local PID=$(echo "$PROCESS_INFO" | awk '{print $2}')
+  
+  if [ ! -z "$PID" ]; then
+    echo -e "${YELLOW}Killing process $PID on port $PORT${NC}"
+    kill -9 $PID
+    sleep 1
+  fi
+}
+
+# Check for existing processes
+if port_in_use "$MEMORY_PORT"; then
+  echo -e "${YELLOW}Process already running on memory port $MEMORY_PORT${NC}"
+  if $KILL_EXISTING; then
+    kill_on_port "$MEMORY_PORT"
+  else
+    echo -e "${RED}Use --kill or -k to force termination of existing processes${NC}"
+    exit 1
+  fi
+fi
+
+if port_in_use "$HTTP_PORT"; then
+  echo -e "${YELLOW}Process already running on HTTP port $HTTP_PORT${NC}"
+  if $KILL_EXISTING; then
+    kill_on_port "$HTTP_PORT"
+  else
+    echo -e "${RED}Use --kill or -k to force termination of existing processes${NC}"
+    exit 1
+  fi
+fi
+
+# Check for virtual environment
+if [ -d "$SCRIPT_DIR/venv" ]; then
+  echo -e "${GREEN}Activating virtual environment...${NC}"
+  source "$SCRIPT_DIR/venv/bin/activate"
+fi
+
+# Start memory bridge in the background
+echo -e "${GREEN}Starting memory bridge on port $MEMORY_PORT...${NC}"
+"$SCRIPT_DIR/cmb_executable" --client-id "$CLIENT_ID" --port "$MEMORY_PORT" --data-dir "$DATA_DIR" > /tmp/cmb_memory.log 2>&1 &
+MEMORY_PID=$!
+
+# Wait for memory bridge to start
+echo -e "${YELLOW}Waiting for memory bridge to start...${NC}"
+sleep 3
+
+# Check if memory bridge started successfully
+if ! ps -p $MEMORY_PID > /dev/null; then
+  echo -e "${RED}Memory bridge failed to start. See /tmp/cmb_memory.log for details${NC}"
+  exit 1
+fi
+
+# Start HTTP wrapper in the background
+echo -e "${GREEN}Starting HTTP wrapper on port $HTTP_PORT...${NC}"
+"$SCRIPT_DIR/cmb_http" --client-id "$CLIENT_ID" --port "$HTTP_PORT" --data-dir "$DATA_DIR" > /tmp/cmb_http.log 2>&1 &
+HTTP_PID=$!
+
+# Wait for HTTP wrapper to start
+echo -e "${YELLOW}Waiting for HTTP wrapper to start...${NC}"
+sleep 3
+
+# Check if HTTP wrapper started successfully
+if ! ps -p $HTTP_PID > /dev/null; then
+  echo -e "${RED}HTTP wrapper failed to start. See /tmp/cmb_http.log for details${NC}"
+  kill -9 $MEMORY_PID
+  exit 1
+fi
+
+echo -e "${GREEN}Both services started successfully!${NC}"
+echo -e "${BLUE}Memory Bridge:${NC} PID $MEMORY_PID on port $MEMORY_PORT"
+echo -e "${BLUE}HTTP Wrapper:${NC} PID $HTTP_PID on port $HTTP_PORT"
+echo ""
+echo -e "${YELLOW}Import the memory helper in Claude Code with:${NC}"
+echo "from cmb.cli.quickmem import m, t, r, f, i"
+echo ""
+echo -e "${YELLOW}To stop services:${NC}"
+echo "kill -9 $MEMORY_PID $HTTP_PID"
+echo ""
+echo -e "${YELLOW}Log files:${NC}"
+echo "Memory Bridge: /tmp/cmb_memory.log"
+echo "HTTP Wrapper: /tmp/cmb_http.log"

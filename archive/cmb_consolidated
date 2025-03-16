@@ -1,0 +1,90 @@
+#!/bin/bash
+# Engram Consolidated Startup Script
+# This script starts the consolidated memory bridge service from any directory
+
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# Default values
+CLIENT_ID="claude"
+PORT=8000
+HOST="127.0.0.1"
+DATA_DIR="$HOME/.cmb"
+
+# Color output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --client-id)
+      CLIENT_ID="$2"
+      shift 2
+      ;;
+    --port)
+      PORT="$2"
+      shift 2
+      ;;
+    --host)
+      HOST="$2"
+      shift 2
+      ;;
+    --data-dir)
+      DATA_DIR="$2"
+      shift 2
+      ;;
+    --help)
+      echo -e "${BLUE}${BOLD}Claude Memory Bridge Consolidated Server${NC}"
+      echo "Usage: cmb_consolidated [options]"
+      echo ""
+      echo "Options:"
+      echo "  --client-id <id>   Client ID for memory service (default: claude)"
+      echo "  --port <port>      Port to run the server on (default: 8000)"
+      echo "  --host <host>      Host to bind the server to (default: 127.0.0.1)"
+      echo "  --data-dir <dir>   Directory to store memory data (default: ~/.cmb)"
+      echo "  --help             Show this help message"
+      echo ""
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Run with --help for usage information"
+      exit 1
+      ;;
+  esac
+done
+
+# Make sure the data directory exists
+mkdir -p "$DATA_DIR"
+
+# Check for virtual environment
+if [ -d "$SCRIPT_DIR/venv" ]; then
+    echo -e "${GREEN}Activating virtual environment...${NC}"
+    source "$SCRIPT_DIR/venv/bin/activate"
+fi
+
+echo -e "${BLUE}${BOLD}Starting Claude Memory Bridge Consolidated Server${NC}"
+echo -e "${BLUE}Client ID:${NC} $CLIENT_ID"
+echo -e "${BLUE}Server:${NC} $HOST:$PORT"
+echo -e "${BLUE}Data directory:${NC} $DATA_DIR"
+echo ""
+echo -e "${YELLOW}This server combines memory service and HTTP wrapper on a single port${NC}"
+echo -e "${YELLOW}Access the API at:${NC}"
+echo "  - Core Memory API: http://$HOST:$PORT/memory/*"
+echo "  - HTTP Wrapper API: http://$HOST:$PORT/http/*"
+echo "  - Nexus API: http://$HOST:$PORT/nexus/*"
+echo "  - Structured Memory API: http://$HOST:$PORT/structured/*"
+echo ""
+echo -e "${YELLOW}Press Ctrl+C to stop the server${NC}"
+echo ""
+
+# Set PYTHONPATH to include the current directory
+export PYTHONPATH=$SCRIPT_DIR:$PYTHONPATH
+
+# Start the server
+python -m cmb.api.consolidated_server --client-id "$CLIENT_ID" --port "$PORT" --host "$HOST" --data-dir "$DATA_DIR"

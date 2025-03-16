@@ -1,8 +1,8 @@
 # Engram
 
 <div align="center">
-  <img src="images/icon.png" alt="Engram Logo" width="120"/>
-  <h3>Persistent Neural Traces:<br>Enabling Continuous Memory Across Sessions</h3>
+  <img src="images/icon.jpg" alt="Engram Logo" width="120"/>
+  <h3>AI Engrams<br>Persistent Memory Across Sessions</h3>
 </div>
 
 A lightweight system providing AI with persistent memory traces, enabling continuous conversation and growth across sessions.
@@ -183,23 +183,20 @@ pip install -r requirements.txt
 pip install -e .
 
 # Start everything (interactive mode)
-./cmb_start_web
+./engram_start_web
 
-# Start everything in background
-./cmb_start_web_bg
-./cmb_stop_web  # Stop background services when done
-
-# Or start services separately
-./cmb_start_all  # Memory services only
-./cmb_web        # Web UI only (requires memory services)
+# Start services separately
+./engram_consolidated  # Memory service only
+python -m cmb.web.app  # Web UI only (requires memory service)
 
 # Launch Claude with memory services and full tool access
-./claude_with_memory  # All-in-one script for Claude Code with memory
+./engram_with_claude   # All-in-one script for Claude Code with memory
 ```
 
 ## Documentation
 
 - [Usage Guide](docs/usage.md): Basic usage instructions and examples
+- [Script Reference](docs/scripts.md): Guide to all executable scripts
 - [QuickMem Commands](docs/quickmem.md): Ultra-short memory command reference
 - [Configuration](docs/configuration.md): Customize Engram to your preferences
 - [Consolidated Server](docs/consolidated_server.md): Single-port server for simplified deployment
