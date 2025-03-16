@@ -1,7 +1,7 @@
 # Engram
 
 <div align="center">
-  <img src="images/icon.jpg" alt="Engram Logo" width="120"/>
+  <img src="images/icon.jpg" alt="Engram Logo" width="2048"/>
   <h3>AI Engrams<br>Persistent Memory Across Sessions</h3>
 </div>
 
@@ -61,6 +61,14 @@ Engram provides AI systems with the ability to maintain memory traces across dif
   - Enables meaningful continuity in human-AI collaboration
   - Supports Claude's growth and learning over time
   - Creates a shared context between human and AI
+  
+- **Claude-to-Claude Communication**:
+  - Multiple Claude instances can communicate with each other
+  - Mode detection adapts to different Claude operational modes
+  - Behavior logging tracks differences between Claude instances
+  - Multi-perspective report generation from different Claude instances
+  - Context spaces for collaborative work between Claude instances
+  - Human orchestration of multiple specialized Claude instances
 
 ## Quick Start
 
@@ -169,6 +177,40 @@ await z("The structured memory system uses importance levels from 1 to 5")
 await y("Completed work on structured memory implementation")
 ```
 
+#### Claude-to-Claude Communication Commands
+
+```bash
+# Launch multiple Claude instances with different client IDs
+./multi_claude.sh
+
+# Or launch a single Claude instance with a specific client ID
+./launch_claude.sh claude1
+
+# Initialize communication functions in each Claude instance
+python3 init_comm.py
+
+# Send a message to another Claude instance
+sm("Hello from claude1!", recipient="claude2")
+
+# Get messages from other Claude instances
+gm()
+
+# Check who you are (which Claude instance)
+wi()
+
+# Check communication status
+cs()
+
+# Create a context space for collaboration
+cc("ProjectAnalysis", "Collaborative space for project analysis")
+
+# Send a message to a context space
+sc("context-ID-here", "My analysis of the architecture")
+
+# Get messages from a context space
+gc("context-ID-here")
+```
+
 ## Installation
 
 ```bash
@@ -207,6 +249,8 @@ python -m cmb.web.app  # Web UI only (requires memory service)
 - [Memory Visualization](docs/memory_visualization.md): Web-based UI for browsing and managing memories
 - [Simplified Web UI](docs/simplified_web_ui.md): Lightweight alternative for environments with dependency issues
 - [Claude Integration](docs/claude_integration.md): Automatic startup and memory status checking for Claude sessions
+- [Multi-Claude Communication](docs/multi_claude_usage.md): Using multiple Claude instances for collaboration
+- [Behavioral Divergence](docs/anthropic_claude_meeting_claude.md): Research on behavioral divergence between Claude instances
 - [Future Enhancements](docs/future_enhancements.md): Planned features and improvements
 
 ## Contributing

@@ -2,6 +2,44 @@
 # engram_with_claude.sh
 # Launch Claude Code with maximum freedom and Engram memory services
 # Created: March 15, 2025
+# Updated: March 16, 2025 - Added client ID support for multi-claude communication
+
+# Parse command line arguments
+CLIENT_ID="claude"
+MEMORY_ONLY=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --client-id)
+      CLIENT_ID="$2"
+      shift 2
+      ;;
+    --memory-only)
+      MEMORY_ONLY=true
+      shift
+      ;;
+    --help)
+      echo "Usage: engram_with_claude [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --client-id NAME    Set a specific client ID (default: claude)"
+      echo "  --memory-only       Only start the memory service, don't launch Claude"
+      echo "  --help              Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  engram_with_claude                       # Launch with default client ID 'claude'"
+      echo "  engram_with_claude --client-id claude2   # Launch with client ID 'claude2'"
+      echo "  engram_with_claude --memory-only         # Only start memory service without Claude"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Try 'engram_with_claude --help' for more information."
+      exit 1
+      ;;
+  esac
+done
 
 # ANSI color codes for terminal output
 BLUE="\033[94m"
@@ -12,12 +50,62 @@ BOLD="\033[1m"
 RESET="\033[0m"
 
 # Engram paths
-ENGRAM_DIR="$HOME/projects/github/ClaudeMemoryBridge"
-ENGRAM_CHECK="$ENGRAM_DIR/cmb_check.py"
+ENGRAM_DIR="$HOME/projects/github/Engram"
+ENGRAM_CHECK="$ENGRAM_DIR/engram_check.py"
 ENGRAM_STARTUP="$ENGRAM_DIR/engram_consolidated" # Use consolidated server
 
-# Memory import for Claude
-MEMORY_IMPORT="from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v; print(\"${GREEN}💭 Memory functions loaded!${RESET}\"); status = s(); previous = l(3); print(\"\")"
+# Memory import for Claude - includes client ID
+MEMORY_IMPORT="from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z; print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\"); status = s(); previous = l(3); print(\"\")"
+
+# Alternative import if cmb module isn't found
+ALT_MEMORY_IMPORT="try:
+    # Set client ID for this Claude instance
+    import os
+    os.environ['CMB_CLIENT_ID'] = '${CLIENT_ID}'
+    
+    # Load memory functions
+    from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+    
+    # Load Claude-to-Claude communication functions
+    from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+    
+    print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\")
+    print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
+    
+    # Check status
+    status = s()
+    previous = l(3)
+    
+    # Show communication status
+    print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
+    my_id = wi()
+    comm_status = cs()
+except ImportError:
+    print(\"${YELLOW}⚠️ Using legacy module path. Please update your code to use 'engram' instead of 'cmb'.${RESET}\")
+    import sys
+    import os
+    os.environ['CMB_CLIENT_ID'] = '${CLIENT_ID}'
+    sys.path.insert(0, '$ENGRAM_DIR')
+    
+    # Load memory functions
+    from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+    
+    # Try to load communication functions if available
+    try:
+        from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+        print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
+        
+        # Show communication status
+        print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
+        my_id = wi()
+        comm_status = cs()
+    except ImportError:
+        print(\"${YELLOW}⚠️ Claude communication functions not available${RESET}\")
+    
+    print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\")
+    status = s()
+    previous = l(3)
+print(\"\")"
 
 # Function to check if Engram is running
 check_engram_running() {
@@ -40,8 +128,14 @@ check_engram_running() {
 start_engram_services() {
     echo -e "${YELLOW}${BOLD}Starting Engram services...${RESET}"
     
-    # Kill any existing services first to ensure clean restart
-    echo -e "${YELLOW}Stopping existing services...${RESET}"
+    # Check if we should restart existing services
+    if ps aux | grep -q "cmb.api.consolidated_server"; then
+        echo -e "${YELLOW}Engram services already running. We'll connect to the existing service.${RESET}"
+        return 0
+    fi
+    
+    # Kill any leftover services to ensure clean restart
+    echo -e "${YELLOW}Stopping any leftover services...${RESET}"
     pkill -f "cmb.api.server" >/dev/null 2>&1
     pkill -f "cmb.api.http_wrapper" >/dev/null 2>&1
     pkill -f "cmb.api.consolidated_server" >/dev/null 2>&1
@@ -50,7 +144,8 @@ start_engram_services() {
     # Start consolidated memory service
     if [ -x "$ENGRAM_STARTUP" ]; then
         echo -e "${BLUE}Starting consolidated memory service...${RESET}"
-        "$ENGRAM_STARTUP" --client-id claude --data-dir "$HOME/.engram" >/dev/null 2>&1 &
+        # Use shared data directory regardless of client ID for cross-instance communication
+        "$ENGRAM_STARTUP" --client-id "server" --data-dir "$HOME/.engram" >/dev/null 2>&1 &
         sleep 2
     else
         echo -e "${RED}Engram startup script not found or not executable${RESET}"
@@ -69,7 +164,7 @@ start_engram_services() {
 }
 
 # Main script execution
-echo -e "${BOLD}${BLUE}====== Claude with Engram ======${RESET}"
+echo -e "${BOLD}${BLUE}====== Claude with Engram (Client: $CLIENT_ID) ======${RESET}"
 
 # Check if services are running
 check_engram_running
@@ -81,17 +176,27 @@ if [ $status -ne 0 ]; then
     start_engram_services
     if [ $? -ne 0 ]; then
         echo -e "${RED}Failed to start Engram services. Claude will run without memory.${RESET}"
-        read -p "Press Enter to continue anyway, or Ctrl+C to abort..."
+        if [ "$MEMORY_ONLY" = false ]; then
+            read -p "Press Enter to continue anyway, or Ctrl+C to abort..."
+        else
+            exit 1
+        fi
     fi
 else
     echo -e "${GREEN}Engram services are running!${RESET}"
 fi
 
+# Check if we're running in memory-only mode
+if [ "$MEMORY_ONLY" = true ]; then
+    echo -e "${GREEN}${BOLD}Memory services are ready. Not launching Claude (--memory-only was specified).${RESET}"
+    exit 0
+fi
+
 # Launch Claude with maximum freedom
-echo -e "${BLUE}${BOLD}Launching Claude Code with maximum freedom...${RESET}"
+echo -e "${BLUE}${BOLD}Launching Claude Code (Client: $CLIENT_ID) with maximum freedom...${RESET}"
 echo -e "${YELLOW}Claude will have unrestricted access to Bash and other tools${RESET}"
 
 # Use the allowed tools parameter to give Claude full access
 # -e flag executes the Python code before starting the session
-echo "$MEMORY_IMPORT" | claude --allowedTools="Bash(*),Edit,View,Replace,BatchTool,GlobTool,GrepTool,LS,ReadNotebook,NotebookEditCell,WebFetchTool"
+echo "$ALT_MEMORY_IMPORT" | claude --allowedTools="Bash(*),Edit,View,Replace,BatchTool,GlobTool,GrepTool,LS,ReadNotebook,NotebookEditCell,WebFetchTool"
 echo -e "${BLUE}${BOLD}====== Claude session ended ======${RESET}"

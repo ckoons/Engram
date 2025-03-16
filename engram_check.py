@@ -28,6 +28,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
+# Check for required dependencies
+try:
+    import requests
+except ImportError:
+    print("Error: 'requests' module not found.")
+    print("Please install required dependencies with:")
+    print("    pip install requests")
+    print("or run the install script:")
+    print("    ./install.sh")
+    sys.exit(1)
+
 # ANSI color codes for terminal output
 BLUE = "\033[94m"
 GREEN = "\033[92m"

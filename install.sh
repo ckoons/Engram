@@ -1,6 +1,6 @@
 #!/bin/bash
-# Claude Memory Bridge Installation Script
-# This script installs the CMB to be accessible from anywhere
+# Engram Installation Script
+# This script installs Engram and its dependencies
 
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -33,30 +33,41 @@ if [ ! -d "$BIN_DIR" ]; then
     fi
 fi
 
-# Create symbolic link for cmb
-echo "Creating symbolic link for 'cmb' command..."
-ln -sf "$SCRIPT_DIR/cmb" "$BIN_DIR/cmb"
-chmod +x "$BIN_DIR/cmb"
-
-# Create symbolic link for claude_helper.py to make it importable
-echo "Creating symbolic link for claude_helper.py..."
-ln -sf "$SCRIPT_DIR/cmb/cli/claude_helper.py" "$BIN_DIR/claude_helper.py"
-chmod +x "$BIN_DIR/claude_helper.py"
+# Create symbolic link for engram launcher
+echo "Creating symbolic link for 'engram' command..."
+ln -sf "$SCRIPT_DIR/engram_launcher.sh" "$BIN_DIR/engram"
+chmod +x "$BIN_DIR/engram"
 
 # Install Python dependencies if pip is available
 if command -v pip &> /dev/null; then
     echo "Installing Python dependencies..."
-    pip install -r "$SCRIPT_DIR/requirements.txt"
+    
+    # Try to install in the user's virtual environment if it exists
+    if [ -d "$SCRIPT_DIR/venv" ]; then
+        echo "Found virtual environment, installing dependencies there..."
+        source "$SCRIPT_DIR/venv/bin/activate"
+        pip install -r "$SCRIPT_DIR/requirements.txt"
+        pip install requests urllib3 pydantic==2.10.6 fastapi python-dotenv
+        deactivate
+    else
+        echo "Installing dependencies globally..."
+        pip install -r "$SCRIPT_DIR/requirements.txt"
+        pip install requests urllib3 pydantic==2.10.6 fastapi python-dotenv
+    fi
 fi
 
+# Make sure scripts are executable
+chmod +x "$SCRIPT_DIR/engram_launcher.sh"
+chmod +x "$SCRIPT_DIR/engram_with_claude"
+chmod +x "$SCRIPT_DIR/engram_check.py"
+chmod +x "$SCRIPT_DIR/engram_consolidated"
+
 echo ""
-echo "Claude Memory Bridge installed successfully!"
+echo "Engram installed successfully!"
 echo ""
 echo "Usage:"
-echo "  cmb                         # Start CMB with default settings"
-echo "  cmb --client-id my-client   # Start with a specific client ID"
-echo "  cmb --help                  # Show help and options"
+echo "  engram                     # Start Claude with Engram memory service"
 echo ""
 echo "In Claude Code sessions:"
-echo "  from claude_helper import query_memory, store_memory, store_thinking, store_longterm"
+echo "  from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v"
 echo ""
