@@ -33,13 +33,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger("engram.consolidated")
 
-# Import CMB modules
+# Import Engram modules
 try:
     from cmb.core.memory import MemoryService, HAS_MEM0
     from cmb.core.structured_memory import StructuredMemory
     from cmb.core.nexus import NexusInterface
+    
+    # First try to import from engram namespace
+    try:
+        from engram.core.config import get_config
+    except ImportError:
+        # Fall back to cmb namespace
+        from cmb.core.config import get_config
+        
 except ImportError as e:
-    logger.error(f"Failed to import CMB modules: {e}")
+    logger.error(f"Failed to import Engram modules: {e}")
     logger.error("Make sure you're running this from the project root or it's installed")
     raise
 
@@ -816,9 +824,12 @@ async def process_message(
     message: str,
     is_user: bool = True,
     metadata: Optional[str] = None,
-    auto_agency: bool = True
+    auto_agency: Optional[bool] = None
 ):
-    """Process a conversation message with optional automatic agency activation."""
+    """Process a conversation message with optional automatic agency activation.
+    
+    Auto-agency defaults to the value in the configuration file if not specified.
+    """
     if nexus is None:
         return {"status": "error", "message": "Nexus interface not initialized"}
     
@@ -828,7 +839,11 @@ async def process_message(
         
         # Automatic agency invocation for user messages
         agency_applied = False
-        if is_user and auto_agency:
+        
+        # If auto_agency not explicitly provided in request, use config setting
+        use_auto_agency = auto_agency if auto_agency is not None else get_config()["auto_agency"]
+        
+        if is_user and use_auto_agency:
             try:
                 # Signal to Claude to exercise agency - we don't use the result directly
                 # but this tells Claude to use its judgment
@@ -979,29 +994,58 @@ app.include_router(structured_router)
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Claude Memory Bridge Consolidated API Server")
-    parser.add_argument("--client-id", type=str, default="claude",
+    parser = argparse.ArgumentParser(description="Engram Consolidated API Server")
+    parser.add_argument("--client-id", type=str, default=None,
                       help="Client ID for memory service")
-    parser.add_argument("--port", type=int, default=8000,
+    parser.add_argument("--port", type=int, default=None,
                       help="Port to run the server on")
-    parser.add_argument("--host", type=str, default="127.0.0.1",
+    parser.add_argument("--host", type=str, default=None,
                       help="Host to bind the server to")
     parser.add_argument("--data-dir", type=str, default=None,
                       help="Directory to store memory data")
+    parser.add_argument("--config", type=str, default=None,
+                      help="Path to custom config file")
+    parser.add_argument("--no-auto-agency", action="store_true",
+                      help="Disable automatic agency activation")
+    parser.add_argument("--debug", action="store_true",
+                      help="Enable debug mode")
     return parser.parse_args()
 
 def main():
     """Main entry point for the CLI command."""
     args = parse_arguments()
     
-    # Set environment variables
-    os.environ["CMB_CLIENT_ID"] = args.client_id
+    # Load configuration
+    config = get_config(args.config)
+    
+    # Override with command line arguments if provided
+    if args.client_id:
+        config["client_id"] = args.client_id
     if args.data_dir:
-        os.environ["CMB_DATA_DIR"] = args.data_dir
+        config["data_dir"] = args.data_dir
+    if args.port:
+        config["port"] = args.port
+    if args.host:
+        config["host"] = args.host
+    if args.no_auto_agency:
+        config["auto_agency"] = False
+    if args.debug:
+        config["debug"] = True
+        logging.getLogger().setLevel(logging.DEBUG)
+    
+    # Set environment variables for backward compatibility
+    os.environ["CMB_CLIENT_ID"] = config["client_id"]
+    os.environ["CMB_DATA_DIR"] = config["data_dir"]
     
     # Start the server
-    logger.info(f"Starting consolidated memory bridge server on {args.host}:{args.port}")
-    uvicorn.run(app, host=args.host, port=args.port)
+    logger.info(f"Starting Engram consolidated server on {config['host']}:{config['port']}")
+    logger.info(f"Client ID: {config['client_id']}, Data directory: {config['data_dir']}")
+    logger.info(f"Auto-agency: {'enabled' if config['auto_agency'] else 'disabled'}")
+    
+    if config["debug"]:
+        logger.info("Debug mode enabled")
+    
+    uvicorn.run(app, host=config["host"], port=config["port"])
 
 if __name__ == "__main__":
     main()

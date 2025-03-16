@@ -5,11 +5,12 @@
 # Get the directory where the script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# Default values
+# Default values - these can be overridden by config file
 CLIENT_ID="claude"
 PORT=8000
 HOST="127.0.0.1"
 DATA_DIR="$HOME/.engram"
+CONFIG_PATH=""
 
 # Color output
 GREEN='\033[0;32m'
@@ -38,6 +39,18 @@ while [[ $# -gt 0 ]]; do
       DATA_DIR="$2"
       shift 2
       ;;
+    --config)
+      CONFIG_PATH="$2"
+      shift 2
+      ;;
+    --no-auto-agency)
+      NO_AUTO_AGENCY=true
+      shift
+      ;;
+    --debug)
+      DEBUG=true
+      shift
+      ;;
     --help)
       echo -e "${BLUE}${BOLD}Engram Consolidated Server${NC}"
       echo "Usage: engram_consolidated [options]"
@@ -47,7 +60,12 @@ while [[ $# -gt 0 ]]; do
       echo "  --port <port>      Port to run the server on (default: 8000)"
       echo "  --host <host>      Host to bind the server to (default: 127.0.0.1)"
       echo "  --data-dir <dir>   Directory to store memory data (default: ~/.engram)"
+      echo "  --config <path>    Path to configuration file"
+      echo "  --no-auto-agency   Disable automatic agency activation"
+      echo "  --debug            Enable debug mode"
       echo "  --help             Show this help message"
+      echo ""
+      echo "Note: Command line options override settings in the configuration file."
       echo ""
       exit 0
       ;;
@@ -86,5 +104,25 @@ echo ""
 # Set PYTHONPATH to include the current directory
 export PYTHONPATH=$SCRIPT_DIR:$PYTHONPATH
 
+# Build command with all available options
+CMD="python -m cmb.api.consolidated_server"
+
+# Add config file if specified
+if [ -n "$CONFIG_PATH" ]; then
+    CMD="$CMD --config $CONFIG_PATH"
+fi
+
+# Add other options
+CMD="$CMD --client-id $CLIENT_ID --port $PORT --host $HOST --data-dir $DATA_DIR"
+
+# Add flags
+if [ "$NO_AUTO_AGENCY" = true ]; then
+    CMD="$CMD --no-auto-agency"
+fi
+
+if [ "$DEBUG" = true ]; then
+    CMD="$CMD --debug"
+fi
+
 # Start the server
-python -m cmb.api.consolidated_server --client-id "$CLIENT_ID" --port "$PORT" --host "$HOST" --data-dir "$DATA_DIR"
+$CMD

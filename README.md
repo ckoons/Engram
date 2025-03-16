@@ -201,6 +201,7 @@ pip install -e .
 
 - [Usage Guide](docs/usage.md): Basic usage instructions and examples
 - [QuickMem Commands](docs/quickmem.md): Ultra-short memory command reference
+- [Configuration](docs/configuration.md): Customize Engram to your preferences
 - [Consolidated Server](docs/consolidated_server.md): Single-port server for simplified deployment
 - [Structured Memory](docs/structured_memory.md): Balanced memory system with importance ranking
 - [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
