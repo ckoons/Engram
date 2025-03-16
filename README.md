@@ -1,10 +1,15 @@
-# Claude Memory Bridge
+# Engram
 
-A lightweight bridge connecting Claude AI to persistent memory, enabling continuous conversation and growth across sessions.
+<div align="center">
+  <img src="images/icon.png" alt="Engram Logo" width="120"/>
+  <h3>Persistent Neural Traces:<br>Enabling Continuous Memory Across Sessions</h3>
+</div>
+
+A lightweight system providing AI with persistent memory traces, enabling continuous conversation and growth across sessions.
 
 ## Overview
 
-Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory across different interactions and conversations. This allows Claude to:
+Engram provides AI systems with the ability to maintain memory traces across different interactions and conversations. This allows AI to:
 
 - Remember past conversations
 - Store and access its own thinking processes
@@ -45,9 +50,10 @@ Claude Memory Bridge (CMB) provides Claude with the ability to maintain memory a
 
 - **Simple Interface**:
   - Ultra-short commands with QuickMem (m, t, r, w, c, k, s, a, p, v, d, n, q, y, z)
-  - Agency and privacy respecting design
+  - Automatic agency activation by default
+  - Single port deployment option
   - Automatic service health checking and startup
-  - Lightweight Python helper for Claude to access memories
+  - Lightweight Python helper for AI to access memories
   - Minimal dependencies, easy to run anywhere
   - Cross-session persistence with vector search
 
@@ -69,14 +75,24 @@ from claude_memory_start import start_memory
 start_memory("Project Work Session")  # Loads memories and starts session
 ```
 
-### Option 2: Manual Memory Loading
+### Option 2: Using the Consolidated Server (Single Port)
 
 ```bash
-# Start both the memory bridge and HTTP services
-./cmb_start_all
+# Start the consolidated server (combines memory and HTTP on a single port)
+./cmb_consolidated
 
-# OR use the cmb_check script to check status and start services
+# OR use the cmb_check script which now uses the consolidated server
 ./cmb_check.py --start
+
+# In your Claude session, access memories with QuickMem:
+from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
+```
+
+### Option 3: Legacy Mode (Separate Services)
+
+```bash
+# Start memory bridge and HTTP services separately
+./cmb_start_all
 
 # In your Claude session, access memories with QuickMem:
 from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
@@ -157,8 +173,8 @@ await y("Completed work on structured memory implementation")
 
 ```bash
 # Clone the repository
-git clone https://github.com/cskoons/ClaudeMemoryBridge
-cd ClaudeMemoryBridge
+git clone https://github.com/ckoons/Engram
+cd Engram
 
 # Install dependencies
 pip install -r requirements.txt
@@ -185,6 +201,7 @@ pip install -e .
 
 - [Usage Guide](docs/usage.md): Basic usage instructions and examples
 - [QuickMem Commands](docs/quickmem.md): Ultra-short memory command reference
+- [Consolidated Server](docs/consolidated_server.md): Single-port server for simplified deployment
 - [Structured Memory](docs/structured_memory.md): Balanced memory system with importance ranking
 - [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
 - [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration

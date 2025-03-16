@@ -14,8 +14,7 @@ RESET="\033[0m"
 # CMB paths
 CMB_DIR="$HOME/projects/github/ClaudeMemoryBridge"
 CMB_CHECK="$CMB_DIR/cmb_check.py"
-CMB_STARTUP="$CMB_DIR/cmb_start_all"
-CMB_HTTP="$CMB_DIR/cmb_http"
+CMB_STARTUP="$CMB_DIR/cmb_consolidated" # Use consolidated server instead of separate services
 
 # Memory import for Claude
 MEMORY_IMPORT="from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v; print(\"${GREEN}💭 Memory functions loaded!${RESET}\"); status = s(); previous = l(3); print(\"\")"
@@ -47,9 +46,9 @@ start_cmb_services() {
     pkill -f "cmb.api.http_wrapper" >/dev/null 2>&1
     sleep 1
     
-    # Start main memory service
+    # Start consolidated memory service
     if [ -x "$CMB_STARTUP" ]; then
-        echo -e "${BLUE}Starting memory service...${RESET}"
+        echo -e "${BLUE}Starting consolidated memory service...${RESET}"
         "$CMB_STARTUP" --client-id claude --data-dir "$HOME/.cmb" >/dev/null 2>&1 &
         sleep 2
     else
@@ -57,13 +56,13 @@ start_cmb_services() {
         return 1
     fi
     
-    # Verify services are running
-    ps aux | grep -q "cmb.api.server" && ps aux | grep -q "cmb.api.http_wrapper"
+    # Verify service is running
+    ps aux | grep -q "cmb.api.consolidated_server"
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}${BOLD}CMB services started successfully!${RESET}"
+        echo -e "${GREEN}${BOLD}CMB consolidated service started successfully!${RESET}"
         return 0
     else
-        echo -e "${RED}Failed to start CMB services${RESET}"
+        echo -e "${RED}Failed to start CMB consolidated service${RESET}"
         return 1
     fi
 }

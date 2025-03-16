@@ -7,14 +7,14 @@ This guide explains how to use Claude Memory Bridge (CMB) to give Claude persist
 To start the memory bridge services:
 
 ```bash
-# Start all services (memory bridge and HTTP wrapper)
-./cmb_start_all
+# Start the consolidated server (memory bridge and HTTP wrapper on a single port)
+./cmb_consolidated
 
 # Start with default settings (client ID: "claude", port: 8000)
-./cmb
+./cmb_consolidated
 
-# Start HTTP wrapper (port: 8001)
-./cmb_http
+# Legacy mode: Start services separately
+./cmb_start_all
 
 # Use a custom client ID
 ./cmb --client-id my-project

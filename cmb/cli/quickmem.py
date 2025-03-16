@@ -28,8 +28,8 @@ import json
 import urllib.request
 from typing import Dict, List, Any, Optional
 
-# Default HTTP URL for the Claude Memory Bridge wrapper
-DEFAULT_HTTP_URL = "http://127.0.0.1:8001"
+# Default HTTP URL for the Claude Memory Bridge server
+DEFAULT_HTTP_URL = "http://127.0.0.1:8000/http"
 
 def _get_http_url():
     """Get the HTTP URL for the Claude Memory Bridge wrapper."""

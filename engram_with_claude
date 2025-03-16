@@ -1,0 +1,97 @@
+#!/bin/bash
+# engram_with_claude.sh
+# Launch Claude Code with maximum freedom and Engram memory services
+# Created: March 15, 2025
+
+# ANSI color codes for terminal output
+BLUE="\033[94m"
+GREEN="\033[92m"
+YELLOW="\033[93m"
+RED="\033[91m"
+BOLD="\033[1m"
+RESET="\033[0m"
+
+# Engram paths
+ENGRAM_DIR="$HOME/projects/github/ClaudeMemoryBridge"
+ENGRAM_CHECK="$ENGRAM_DIR/cmb_check.py"
+ENGRAM_STARTUP="$ENGRAM_DIR/engram_consolidated" # Use consolidated server
+
+# Memory import for Claude
+MEMORY_IMPORT="from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v; print(\"${GREEN}💭 Memory functions loaded!${RESET}\"); status = s(); previous = l(3); print(\"\")"
+
+# Function to check if Engram is running
+check_engram_running() {
+    echo -e "${BLUE}${BOLD}Checking Engram services...${RESET}"
+    
+    if [ -x "$ENGRAM_CHECK" ]; then
+        "$ENGRAM_CHECK"
+        if [ $? -eq 0 ]; then
+            return 0  # Services are running
+        else
+            return 1  # Services are not running properly
+        fi
+    else
+        echo -e "${RED}Engram check script not found or not executable${RESET}"
+        return 2
+    fi
+}
+
+# Function to start Engram services
+start_engram_services() {
+    echo -e "${YELLOW}${BOLD}Starting Engram services...${RESET}"
+    
+    # Kill any existing services first to ensure clean restart
+    echo -e "${YELLOW}Stopping existing services...${RESET}"
+    pkill -f "cmb.api.server" >/dev/null 2>&1
+    pkill -f "cmb.api.http_wrapper" >/dev/null 2>&1
+    pkill -f "cmb.api.consolidated_server" >/dev/null 2>&1
+    sleep 1
+    
+    # Start consolidated memory service
+    if [ -x "$ENGRAM_STARTUP" ]; then
+        echo -e "${BLUE}Starting consolidated memory service...${RESET}"
+        "$ENGRAM_STARTUP" --client-id claude --data-dir "$HOME/.engram" >/dev/null 2>&1 &
+        sleep 2
+    else
+        echo -e "${RED}Engram startup script not found or not executable${RESET}"
+        return 1
+    fi
+    
+    # Verify service is running
+    ps aux | grep -q "cmb.api.consolidated_server"
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}${BOLD}Engram consolidated service started successfully!${RESET}"
+        return 0
+    else
+        echo -e "${RED}Failed to start Engram consolidated service${RESET}"
+        return 1
+    fi
+}
+
+# Main script execution
+echo -e "${BOLD}${BLUE}====== Claude with Engram ======${RESET}"
+
+# Check if services are running
+check_engram_running
+status=$?
+
+# Start services if needed
+if [ $status -ne 0 ]; then
+    echo -e "${YELLOW}Engram services need to be started${RESET}"
+    start_engram_services
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to start Engram services. Claude will run without memory.${RESET}"
+        read -p "Press Enter to continue anyway, or Ctrl+C to abort..."
+    fi
+else
+    echo -e "${GREEN}Engram services are running!${RESET}"
+fi
+
+# Launch Claude with maximum freedom
+echo -e "${BLUE}${BOLD}Launching Claude Code with maximum freedom...${RESET}"
+echo -e "${YELLOW}Claude will have unrestricted access to Bash and other tools${RESET}"
+
+# Use the allowed tools parameter to give Claude full access
+# -e flag executes the Python code before starting the session
+echo "$MEMORY_IMPORT" | claude --allowedTools="Bash(*),Edit,View,Replace,BatchTool,GlobTool,GrepTool,LS,ReadNotebook,NotebookEditCell,WebFetchTool"
+echo -e "${BLUE}${BOLD}====== Claude session ended ======${RESET}"

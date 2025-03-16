@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2025-03-15
+
+### Added
+- Consolidated Server: Combined memory service and HTTP wrapper on a single port
+- Automatic agency activation in Nexus message processing
+- Example code for using the consolidated server
+- New documentation for consolidated server usage
+
+### Changed
+- Updated URLs in quickmem library to use consolidated server by default
+- Modified claude_with_memory script to use consolidated server
+- Updated cmb_check.py to check for consolidated server process
+
+### Fixed
+- Fixed path handling in cmb_consolidated script
+
 ## [0.4.0] - 2025-03-15
 
 ### Added

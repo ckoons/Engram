@@ -37,8 +37,8 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 # Default URLs for services
-DEFAULT_HTTP_URL = "http://127.0.0.1:8001"
-DEFAULT_SERVER_URL = "http://127.0.0.1:8000"
+DEFAULT_HTTP_URL = "http://127.0.0.1:8000/http"
+DEFAULT_SERVER_URL = "http://127.0.0.1:8000/memory"
 DEFAULT_DATA_DIR = os.path.expanduser("~/.cmb")
 
 def get_http_url():
@@ -107,17 +107,25 @@ def check_services() -> Dict[str, Any]:
         "mem0_available": False,
     }
     
-    # Check memory server
-    memory_pids = check_process_running("cmb.api.server")
-    if memory_pids:
+    # Check consolidated server first
+    consolidated_pids = check_process_running("cmb.api.consolidated_server")
+    if consolidated_pids:
+        # If consolidated server is running, both services are available
         result["memory_server"]["running"] = True
-        result["memory_server"]["pid"] = memory_pids[0]
-    
-    # Check HTTP wrapper
-    http_pids = check_process_running("cmb.api.http_wrapper")
-    if http_pids:
+        result["memory_server"]["pid"] = consolidated_pids[0]
         result["http_wrapper"]["running"] = True
-        result["http_wrapper"]["pid"] = http_pids[0]
+        result["http_wrapper"]["pid"] = consolidated_pids[0]
+    else:
+        # Legacy check - look for separate memory server and HTTP wrapper
+        memory_pids = check_process_running("cmb.api.server")
+        if memory_pids:
+            result["memory_server"]["running"] = True
+            result["memory_server"]["pid"] = memory_pids[0]
+        
+        http_pids = check_process_running("cmb.api.http_wrapper")
+        if http_pids:
+            result["http_wrapper"]["running"] = True
+            result["http_wrapper"]["pid"] = http_pids[0]
     
     # Try to get version and connectivity information
     if result["http_wrapper"]["running"]:
@@ -167,7 +175,7 @@ def start_services(client_id: str = "claude", data_dir: str = None, force_restar
     
     # Set up command parameters
     script_path = get_script_path()
-    cmb_start_path = os.path.join(script_path, "cmb_start_all")
+    cmb_start_path = os.path.join(script_path, "cmb_consolidated")
     
     # Make sure the script is executable
     try:
