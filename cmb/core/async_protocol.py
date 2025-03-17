@@ -968,7 +968,7 @@ class AsyncCommClient:
         Returns:
             Message ID
         """
-        # Get the parent message
+        # Try to get messages including the one we want to reply to
         parent_messages = await self.receive(
             include_processed=True, 
             mark_as_delivered=False,
@@ -978,28 +978,71 @@ class AsyncCommClient:
         # Find the parent message
         parent = None
         for msg in parent_messages:
-            if msg["message_id"] == parent_id:
+            if msg.get("message_id") == parent_id:
                 parent = msg
                 break
         
+        # If not found in received messages, try to find it in message directories
         if parent is None:
-            logger.warning(f"Parent message {parent_id} not found")
+            # Enhanced search across all message storage locations
+            search_locations = [
+                (self.router.queue.pending_dir, "pending"),
+                (self.router.queue.delivered_dir, "delivered"),
+                (self.router.queue.processed_dir, "processed"),
+                (self.router.queue.expired_dir, "expired")  # Even check expired messages
+            ]
+            
+            # Search in all locations
+            for directory, location_name in search_locations:
+                matching_files = list(directory.glob(f"*{parent_id}.json"))
+                if matching_files:
+                    try:
+                        with open(matching_files[0], "r") as f:
+                            parent = json.load(f)
+                            logger.info(f"Found parent message {parent_id} in {location_name} directory")
+                            break
+                    except Exception as e:
+                        logger.error(f"Error loading parent message from {location_name} directory: {e}")
+        
+        # If still not found, we can't reply
+        if parent is None:
+            logger.warning(f"Parent message {parent_id} not found in any location")
             return ""
         
         # Use same priority as parent if not specified
         if priority is None:
-            priority = parent["priority"]
+            try:
+                priority = parent["priority"]
+            except (KeyError, TypeError):
+                logger.warning(f"Could not get priority from parent, using default priority 2")
+                priority = 2
+        
+        # Add metadata about the reply
+        reply_metadata = metadata or {}
+        reply_metadata.update({
+            "is_reply": True,
+            "parent_id": parent_id,
+            "parent_sender": parent.get("sender_id", "unknown"),
+            "reply_timestamp": datetime.now().isoformat()
+        })
+        
+        # Get thread ID from parent or use parent ID as thread ID
+        thread_id = parent.get("thread_id", parent_id)
         
         # Send reply
-        return await self.send(
-            content=content,
-            to=parent["sender_id"],
-            msg_type="response",
-            priority=priority,
-            metadata=metadata,
-            thread_id=parent.get("thread_id", parent_id),
-            parent_id=parent_id
-        )
+        try:
+            return await self.send(
+                content=content,
+                to=parent["sender_id"],
+                msg_type="response",
+                priority=priority,
+                metadata=reply_metadata,
+                thread_id=thread_id,
+                parent_id=parent_id
+            )
+        except Exception as e:
+            logger.error(f"Error sending reply to message {parent_id}: {e}")
+            return ""
     
     async def cleanup(self) -> int:
         """

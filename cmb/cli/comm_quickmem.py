@@ -487,7 +487,7 @@ def whoami():
 
 # Asynchronous communication functions
 
-def send_async(content: Any, to: str = "all", msg_type: str = "direct", 
+async def send_async(content: Any, to: str = "all", msg_type: str = "direct", 
                priority: int = 2, ttl_seconds: Optional[int] = None, 
                metadata: Optional[Dict[str, Any]] = None,
                thread_id: Optional[str] = None,
@@ -497,6 +497,8 @@ def send_async(content: Any, to: str = "all", msg_type: str = "direct",
     
     This function uses the new AsyncMessage protocol which provides
     more robust message delivery guarantees and lifecycle tracking.
+    
+    Note: This is a coroutine and must be awaited.
     
     Args:
         content: Message content (can be any JSON-serializable data)
@@ -513,8 +515,7 @@ def send_async(content: Any, to: str = "all", msg_type: str = "direct",
         return None
     
     try:
-        loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(async_comm.send(
+        result = await async_comm.send(
             content=content,
             to=to,
             msg_type=msg_type,
@@ -523,14 +524,14 @@ def send_async(content: Any, to: str = "all", msg_type: str = "direct",
             metadata=metadata,
             thread_id=thread_id,
             parent_id=parent_id
-        ))
+        )
         print(f"📤 Async message sent: {result}")
         return result
     except Exception as e:
         print(f"❌ Error sending async message: {e}")
         return None
 
-def receive_async(include_broadcast: bool = True, msg_type: Optional[str] = None,
+async def receive_async(include_broadcast: bool = True, msg_type: Optional[str] = None,
                  from_id: Optional[str] = None, min_priority: int = 1,
                  include_processed: bool = False, mark_as_delivered: bool = True,
                  limit: int = 10):
@@ -551,8 +552,7 @@ def receive_async(include_broadcast: bool = True, msg_type: Optional[str] = None
         return []
     
     try:
-        loop = asyncio.get_event_loop()
-        messages = loop.run_until_complete(async_comm.receive(
+        messages = await async_comm.receive(
             include_broadcast=include_broadcast,
             msg_type=msg_type,
             from_id=from_id,
@@ -560,7 +560,7 @@ def receive_async(include_broadcast: bool = True, msg_type: Optional[str] = None
             include_processed=include_processed,
             mark_as_delivered=mark_as_delivered,
             limit=limit
-        ))
+        )
         
         if not messages:
             print("ℹ️ No async messages found")
@@ -580,7 +580,7 @@ def receive_async(include_broadcast: bool = True, msg_type: Optional[str] = None
         print(f"❌ Error receiving async messages: {e}")
         return []
 
-def mark_processed_async(message_id: str):
+async def mark_processed_async(message_id: str):
     """
     Mark an async message as fully processed.
     
@@ -592,8 +592,7 @@ def mark_processed_async(message_id: str):
         return False
     
     try:
-        loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(async_comm.mark_processed(message_id))
+        result = await async_comm.mark_processed(message_id)
         if result:
             print(f"✅ Marked async message {message_id} as processed")
         else:
@@ -603,7 +602,7 @@ def mark_processed_async(message_id: str):
         print(f"❌ Error marking async message as processed: {e}")
         return False
 
-def broadcast_async(content: Any, msg_type: str = "broadcast", 
+async def broadcast_async(content: Any, msg_type: str = "broadcast", 
                    priority: int = 2, ttl_seconds: Optional[int] = None,
                    metadata: Optional[Dict[str, Any]] = None):
     """
@@ -621,21 +620,20 @@ def broadcast_async(content: Any, msg_type: str = "broadcast",
         return None
     
     try:
-        loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(async_comm.broadcast(
+        result = await async_comm.broadcast(
             content=content,
             msg_type=msg_type,
             priority=priority,
             ttl_seconds=ttl_seconds,
             metadata=metadata
-        ))
+        )
         print(f"📣 Async broadcast sent: {result}")
         return result
     except Exception as e:
         print(f"❌ Error broadcasting async message: {e}")
         return None
 
-def reply_async(parent_id: str, content: Any, 
+async def reply_async(parent_id: str, content: Any, 
                priority: Optional[int] = None,
                metadata: Optional[Dict[str, Any]] = None):
     """
@@ -646,36 +644,44 @@ def reply_async(parent_id: str, content: Any,
         content: Reply content
         priority: Priority level (1-5, defaults to parent's priority)
         metadata: Additional metadata
+    
+    Returns:
+        Message ID of the reply or None if failed
     """
     if not ASYNC_AVAILABLE or async_comm is None:
         print("❌ Async communication not available")
         return None
     
     try:
-        loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(async_comm.reply(
+        result = await async_comm.reply(
             parent_id=parent_id,
             content=content,
             priority=priority,
             metadata=metadata
-        ))
-        print(f"↩️ Async reply sent: {result}")
-        return result
+        )
+        
+        if result:
+            print(f"↩️ Async reply sent: {result}")
+            return result
+        else:
+            print(f"⚠️ Could not send reply to message {parent_id}")
+            return None
     except Exception as e:
         print(f"❌ Error sending async reply: {e}")
         return None
 
-def async_status():
+async def async_status():
     """
     Get status of the async communication system.
+    
+    Note: This is a coroutine and must be awaited.
     """
     if not ASYNC_AVAILABLE or async_comm is None:
         print("❌ Async communication not available")
         return None
     
     try:
-        loop = asyncio.get_event_loop()
-        status = loop.run_until_complete(async_comm.status())
+        status = await async_comm.status()
         
         print(f"📊 Async communication status:")
         print(f"- Client ID: {status['client_id']}")
@@ -696,7 +702,7 @@ def async_status():
         print(f"❌ Error getting async status: {e}")
         return None
 
-def cleanup_async():
+async def cleanup_async():
     """
     Clean up expired async messages.
     """
@@ -705,8 +711,7 @@ def cleanup_async():
         return 0
     
     try:
-        loop = asyncio.get_event_loop()
-        count = loop.run_until_complete(async_comm.cleanup())
+        count = await async_comm.cleanup()
         print(f"🧹 Cleaned up {count} expired async messages")
         return count
     except Exception as e:
@@ -757,10 +762,8 @@ __all__ = [
 ]
 
 # Test function to check if everything is working
-if __name__ == "__main__":
-    # Create event loop
-    loop = asyncio.get_event_loop()
-    
+async def test_communication():
+    """Test both classic and async communication."""
     print(f"Claude Communication Test")
     print(f"=========================")
     
@@ -771,6 +774,19 @@ if __name__ == "__main__":
     # Test async communication
     print("\nTesting async communication...")
     if ASYNC_AVAILABLE and async_comm:
-        status = async_status()
+        status = await async_status()
     else:
         print("❌ Async communication not available")
+    
+    return status
+
+if __name__ == "__main__":
+    # Create event loop
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    # Run the test
+    loop.run_until_complete(test_communication())

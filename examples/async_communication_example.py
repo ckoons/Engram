@@ -183,17 +183,42 @@ async def example_reply(parent_id):
     reply_content = {
         "response": "This is a reply to your message",
         "timestamp": datetime.now().isoformat(),
-        "referenced_id": parent_id
+        "referenced_id": parent_id,
+        "additional_info": "This tests the enhanced reply functionality"
     }
     
-    # Send reply
+    # Create custom metadata
+    metadata = {
+        "example": "reply_test",
+        "test_timestamp": datetime.now().isoformat(),
+        "test_purpose": "Testing enhanced reply functionality"
+    }
+    
+    # Send reply with custom metadata
     message_id = await reply_async(
         parent_id=parent_id,
-        content=reply_content
+        content=reply_content,
+        metadata=metadata
     )
     
     if message_id:
         print(f"- ✅ Reply sent with ID: {message_id}")
+        
+        # Try to retrieve the reply we just sent
+        print("- Checking if reply was properly stored...")
+        received_messages = await receive_async(include_processed=True, mark_as_delivered=False)
+        
+        # Look for our reply in the received messages
+        found = False
+        for msg in received_messages:
+            if msg.get("message_id") == message_id:
+                found = True
+                print("  ✓ Reply found in message store")
+                break
+                
+        if not found:
+            print("  ⚠️ Reply not found in received messages (this may be normal if delivery is delayed)")
+        
         return message_id
     else:
         print(f"- ❌ Failed to send reply")
