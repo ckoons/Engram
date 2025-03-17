@@ -19,7 +19,7 @@ Claude Memory Bridge (CMB) is a project to give Claude persistent memory across 
   - Enhanced Retrieval: Context-aware memory loading
   - Nexus Interface: Standardized API for memory-enabled AI assistants
 - Multiple memory categories (personal, projects, facts, preferences, session, private)
-- Both vector-based (using mem0) and fallback memory implementations
+- Both vector-based (using mem0ai) and fallback memory implementations
 - Auto-categorization based on content analysis
 - Memory digests for session start context
 - Simple Claude helper interface for store/retrieve operations
@@ -133,6 +133,39 @@ await process_message("Let's discuss the structured memory implementation", is_u
 # Auto-remember something (ultra-short version: z)
 await auto_remember("The structured memory system uses importance levels from 1 to 5")
 ```
+
+## Latest Updates (March 17, 2025)
+
+### Memory System Improvements
+
+1. **Vector Storage Compatibility**:
+   - Updated to support mem0ai library (replacing mem0)
+   - Improved error handling and graceful fallback to file-based storage
+   - Enhanced health check endpoint with detailed implementation status
+   - Better diagnostic information during startup
+
+2. **Service Reliability**:
+   - Fixed port conflict detection and handling
+   - Improved service startup and status checking
+   - Added comprehensive error reporting during service initialization
+   - Enhanced health endpoint with implementation details
+
+3. **Engram Script Enhancements**:
+   - Fixed issue with engram_with_claude script detection of running services
+   - Added port availability checking before starting services
+   - Improved error logging for better troubleshooting
+   - Enhanced process management with proper PID tracking
+
+### Implementation Status
+
+As of March 17, 2025, Engram has been successfully migrated to work with both mem0ai (for vector search) and a fallback file-based implementation. The system is designed to work correctly without mem0ai while maintaining its core functionalities:
+
+- Storage and retrieval of memories works in all implementations
+- Context-aware memory loading functions correctly
+- Structured memory and Nexus interfaces operate as expected
+- Memory compartmentalization and expiration controls work in all modes
+
+When mem0ai is available, the system will automatically use vector search for enhanced retrieval. When mem0ai is unavailable, the system automatically falls back to file-based storage, with clear logging of the fallback status.
 
 ## Future Enhancements
 

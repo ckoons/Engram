@@ -68,6 +68,9 @@ class HealthResponse(BaseModel):
     namespaces: List[str]
     structured_memory_available: bool
     nexus_available: bool
+    implementation_type: str = "unknown"
+    vector_search: bool = False
+    vector_db_version: Optional[str] = None
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -141,16 +144,67 @@ async def health_check():
     if memory_service is None:
         raise HTTPException(status_code=500, detail="Memory service not initialized")
     
-    namespaces = await memory_service.get_namespaces()
-    
-    return HealthResponse(
-        status="ok",
-        client_id=client_id,
-        mem0_available=memory_service.mem0_available if hasattr(memory_service, "mem0_available") else False,
-        namespaces=namespaces,
-        structured_memory_available=structured_memory is not None,
-        nexus_available=nexus is not None
-    )
+    try:
+        # Determine memory implementation type
+        mem0_available = False
+        mem0_version = None
+        implementation_type = "file"
+        
+        if hasattr(memory_service, "mem0_available"):
+            mem0_available = memory_service.mem0_available
+            
+            # Try to get vector db version if available
+            if mem0_available:
+                implementation_type = "vector"
+                try:
+                    # Try both import paths
+                    try:
+                        import mem0ai
+                        mem0_version = mem0ai.__version__
+                    except ImportError:
+                        try:
+                            import mem0
+                            mem0_version = mem0.__version__
+                        except ImportError:
+                            pass
+                except Exception:
+                    pass
+        
+        # Get available namespaces
+        namespaces = await memory_service.get_namespaces()
+        
+        # Enhanced status response with implementation details
+        response_data = {
+            "status": "ok",
+            "client_id": client_id,
+            "mem0_available": mem0_available,
+            "implementation_type": implementation_type,
+            "vector_search": mem0_available,
+            "namespaces": namespaces,
+            "structured_memory_available": structured_memory is not None,
+            "nexus_available": nexus is not None
+        }
+        
+        # Include version info if available
+        if mem0_version:
+            response_data["vector_db_version"] = mem0_version
+        
+        return HealthResponse(**response_data)
+    except Exception as e:
+        # Log the error but don't crash the health endpoint
+        import logging
+        logging.error(f"Error in health check: {e}")
+        
+        # Return a degraded but functional response
+        return HealthResponse(
+            status="degraded",
+            client_id=client_id,
+            mem0_available=False,
+            implementation_type="fallback",
+            namespaces=[],
+            structured_memory_available=structured_memory is not None,
+            nexus_available=nexus is not None
+        )
 
 # ==================== CORE MEMORY API ROUTES ====================
 

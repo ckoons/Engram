@@ -2,7 +2,7 @@
 # engram_with_claude.sh
 # Launch Claude Code with maximum freedom and Engram memory services
 # Created: March 15, 2025
-# Updated: March 16, 2025 - Added client ID support for multi-claude communication
+# Updated: March 17, 2025 - Added location independence and venv support
 
 # Parse command line arguments
 CLIENT_ID="claude"
@@ -49,8 +49,31 @@ RED="\033[91m"
 BOLD="\033[1m"
 RESET="\033[0m"
 
+# Find the Engram installation directory
+# First try to find it using pip
+ENGRAM_PKG_DIR=$(python -c "import engram; print(engram.__path__[0])" 2>/dev/null)
+if [ -n "$ENGRAM_PKG_DIR" ]; then
+  # Go up one level from the package directory to get the installation directory
+  ENGRAM_DIR=$(dirname "$ENGRAM_PKG_DIR")
+  echo -e "${GREEN}Found Engram installation via pip at: $ENGRAM_DIR${RESET}"
+else
+  # Fall back to the default location
+  ENGRAM_DIR="$HOME/projects/github/Engram"
+  echo -e "${YELLOW}Using default Engram location: $ENGRAM_DIR${RESET}"
+fi
+
+# Handle virtual environment in the Engram directory
+VENV_DIR="$ENGRAM_DIR/venv"
+if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/activate" ]; then
+  echo -e "${GREEN}Found virtual environment at: $VENV_DIR${RESET}"
+  source "$VENV_DIR/bin/activate"
+else
+  echo -e "${YELLOW}No Engram virtual environment found, using system Python${RESET}"
+  # Add Engram directory to Python path for direct imports
+  export PYTHONPATH="$ENGRAM_DIR:$PYTHONPATH"
+fi
+
 # Engram paths
-ENGRAM_DIR="$HOME/projects/github/Engram"
 ENGRAM_CHECK="$ENGRAM_DIR/engram_check.py"
 ENGRAM_STARTUP="$ENGRAM_DIR/engram_consolidated" # Use consolidated server
 
@@ -58,102 +81,133 @@ ENGRAM_STARTUP="$ENGRAM_DIR/engram_consolidated" # Use consolidated server
 MEMORY_IMPORT="from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z; print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\"); status = s(); previous = l(3); print(\"\")"
 
 # Alternative import with engram namespace support
-ALT_MEMORY_IMPORT="try:
-    # Set client ID for this Claude instance
-    import os
-    os.environ['ENGRAM_CLIENT_ID'] = '${CLIENT_ID}'
+ALT_MEMORY_IMPORT="
+# Setup Python environment
+import sys, os
+
+# Set client ID for this Claude instance
+os.environ['ENGRAM_CLIENT_ID'] = '${CLIENT_ID}'
+
+# Add Engram directories to Python path to ensure modules can be found
+ENGRAM_LOCATIONS = [
+    '$ENGRAM_DIR',  # Use the detected directory
+    '$HOME/projects/github/Engram',  # Default location
+    os.path.expanduser('~/projects/github/Engram'),  # Expanded default path
+]
+
+for location in ENGRAM_LOCATIONS:
+    if location and location not in sys.path:
+        sys.path.insert(0, location)
+        print(f\"${YELLOW}Added {location} to Python path${RESET}\")
+
+# Keep track of which module namespace we loaded from
+found_package = None
+
+# First try to import from engram namespace
+try:
+    # Load memory functions from engram
+    from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+    found_package = 'engram'
+    print(\"${GREEN}💭 Memory functions loaded from engram package (Client: ${CLIENT_ID})!${RESET}\")
     
-    # Try to load from the new engram namespace first
+    # Try to load communication functions
     try:
-        # Load memory functions
-        from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-        
-        # Load Claude-to-Claude communication functions
         from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-        
-        print(\"${GREEN}💭 Memory functions loaded from engram package (Client: ${CLIENT_ID})!${RESET}\")
-        print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
-    except ImportError:
-        # Fall back to legacy cmb namespace
-        print(\"${YELLOW}⚠️ Using legacy cmb module path. Engram package not found.${RESET}\")
-        
-        # Load memory functions
-        from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-        
-        # Load Claude-to-Claude communication functions
-        from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-        
-        print(\"${GREEN}💭 Memory functions loaded from cmb package (Client: ${CLIENT_ID})!${RESET}\")
-        print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
+        print(\"${GREEN}💬 Claude communication functions loaded from engram package!${RESET}\")
+        # Show communication status
+        print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
+        my_id = wi()
+        comm_status = cs()
+    except ImportError as e:
+        print(f\"${YELLOW}⚠️ Claude communication functions not available in engram package: {e}${RESET}\")
+except ImportError as e:
+    print(f\"${YELLOW}⚠️ Could not import from engram package: {e}${RESET}\")
     
-    # Check status
-    status = s()
-    previous = l(3)
-    
-    # Show communication status
-    print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
-    my_id = wi()
-    comm_status = cs()
-except ImportError:
-    print(\"${YELLOW}⚠️ Using direct module path. Adding Engram directory to Python path.${RESET}\")
-    import sys
-    import os
-    os.environ['ENGRAM_CLIENT_ID'] = '${CLIENT_ID}'
-    sys.path.insert(0, '$ENGRAM_DIR')
-    
-    # Try engram namespace first
+    # Fall back to legacy cmb namespace
     try:
-        # Load memory functions
-        from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-        
-        # Try to load communication functions if available
-        try:
-            from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-            print(\"${GREEN}💬 Claude communication functions loaded from engram package!${RESET}\")
-            
-            # Show communication status
-            print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
-            my_id = wi()
-            comm_status = cs()
-        except ImportError:
-            print(\"${YELLOW}⚠️ Claude communication functions not available in engram package${RESET}\")
-        
-        print(\"${GREEN}💭 Memory functions loaded from engram package (Client: ${CLIENT_ID})!${RESET}\")
-    except ImportError:
-        # Fall back to legacy cmb namespace
-        print(\"${YELLOW}⚠️ Using legacy cmb module path.${RESET}\")
-        
-        # Load memory functions
+        # Load memory functions from cmb
         from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+        found_package = 'cmb'
+        print(\"${GREEN}💭 Memory functions loaded from cmb package (Client: ${CLIENT_ID})!${RESET}\")
         
-        # Try to load communication functions if available
+        # Try to load communication functions
         try:
             from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
             print(\"${GREEN}💬 Claude communication functions loaded from cmb package!${RESET}\")
-            
             # Show communication status
             print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
             my_id = wi()
             comm_status = cs()
-        except ImportError:
-            print(\"${YELLOW}⚠️ Claude communication functions not available in cmb package${RESET}\")
-        
-        print(\"${GREEN}💭 Memory functions loaded from cmb package (Client: ${CLIENT_ID})!${RESET}\")
-    
-    # Check status
-    status = s()
-    previous = l(3)
+        except ImportError as e:
+            print(f\"${YELLOW}⚠️ Claude communication functions not available in cmb package: {e}${RESET}\")
+    except ImportError as e:
+        print(f\"${RED}❌ Failed to import memory functions from both engram and cmb packages: {e}${RESET}\")
+        print(\"${RED}❌ Claude will run without memory capabilities${RESET}\")
+        sys.exit(1)
+
+# Check if we successfully loaded any package
+if found_package:
+    # Check memory service status
+    try:
+        status = s()
+        previous = l(3)
+        print(f\"${GREEN}✓ Memory service status checked successfully${RESET}\")
+    except Exception as e:
+        print(f\"${RED}❌ Error checking memory status: {e}${RESET}\")
+        print(\"${YELLOW}⚠️ Memory service may not be running correctly${RESET}\")
+
 print(\"\")"
 
 # Function to check if Engram is running
 check_engram_running() {
     echo -e "${BLUE}${BOLD}Checking Engram services...${RESET}"
     
+    # First check directly if the process is running using pgrep
+    # This is more reliable than grep as it won't match itself
+    ENGRAM_PIDS=$(pgrep -f "engram.api.consolidated_server" 2>/dev/null)
+    PROCESS_RUNNING=$?
+    
+    # Also check if something is already using port 8000
+    if command -v lsof >/dev/null 2>&1; then
+        PORT_IN_USE=$(lsof -i :8000 -t 2>/dev/null)
+        if [ -n "$PORT_IN_USE" ]; then
+            PORT_PROCESS=$(ps -p $PORT_IN_USE -o command= 2>/dev/null)
+            echo -e "${YELLOW}Port 8000 is already in use by process: $PORT_PROCESS (PID: $PORT_IN_USE)${RESET}"
+            
+            # If the process is Engram, report it as running
+            if echo "$PORT_PROCESS" | grep -q "engram"; then
+                echo -e "${GREEN}Engram process detected on port 8000${RESET}"
+                PROCESS_RUNNING=0
+                ENGRAM_PIDS=$PORT_IN_USE
+            fi
+        fi
+    fi
+    
+    if [ $PROCESS_RUNNING -eq 0 ] && [ -n "$ENGRAM_PIDS" ]; then
+        echo -e "${GREEN}Engram process detected as running with PID(s): $ENGRAM_PIDS${RESET}"
+        
+        # Check if HTTP endpoint is responding
+        if curl -s "http://127.0.0.1:8000/health" > /dev/null 2>&1; then
+            echo -e "${GREEN}Engram API is responding at http://127.0.0.1:8000${RESET}"
+            return 0  # Services are running and responsive
+        else
+            echo -e "${YELLOW}Engram process is running but API is not responding${RESET}"
+            # Continue with check script for more details
+        fi
+    else
+        echo -e "${YELLOW}No Engram process detected${RESET}"
+    fi
+    
+    # If process check was inconclusive, use the check script for more details
     if [ -x "$ENGRAM_CHECK" ]; then
         "$ENGRAM_CHECK"
-        if [ $? -eq 0 ]; then
+        
+        # Also check directly if memory server is running according to the check script
+        if "$ENGRAM_CHECK" | grep -q "Memory Server: ✅ Running"; then
+            echo -e "${GREEN}Engram services reported as running by check script${RESET}"
             return 0  # Services are running
         else
+            echo -e "${RED}Engram services are not properly running according to check script${RESET}"
             return 1  # Services are not running properly
         fi
     else
@@ -167,9 +221,22 @@ start_engram_services() {
     echo -e "${YELLOW}${BOLD}Starting Engram services...${RESET}"
     
     # Check if we should restart existing services
-    if ps aux | grep -q "engram.api.consolidated_server"; then
+    ps aux | grep "engram.api.consolidated_server" | grep -v "grep" > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
         echo -e "${YELLOW}Engram services already running. We'll connect to the existing service.${RESET}"
         return 0
+    fi
+    
+    # Also check if port 8000 is in use
+    if command -v lsof >/dev/null 2>&1; then
+        PORT_IN_USE=$(lsof -i :8000 -t 2>/dev/null)
+        if [ -n "$PORT_IN_USE" ]; then
+            PORT_PROCESS=$(ps -p $PORT_IN_USE -o command= 2>/dev/null)
+            echo -e "${RED}Port 8000 is already in use by process: $PORT_PROCESS (PID: $PORT_IN_USE)${RESET}"
+            echo -e "${YELLOW}Killing process using port 8000...${RESET}"
+            kill -15 $PORT_IN_USE 2>/dev/null
+            sleep 2
+        fi
     fi
     
     # Kill any leftover services to ensure clean restart
@@ -182,18 +249,57 @@ start_engram_services() {
     # Start consolidated memory service
     if [ -x "$ENGRAM_STARTUP" ]; then
         echo -e "${BLUE}Starting consolidated memory service...${RESET}"
-        # Use shared data directory regardless of client ID for cross-instance communication
-        "$ENGRAM_STARTUP" --client-id "server" --data-dir "$HOME/.engram" >/dev/null 2>&1 &
-        sleep 2
+        
+        # Create temp file for output
+        ERROR_LOG="/tmp/engram_error_$$.log"
+        
+        # Change to Engram directory and activate venv
+        cd "$ENGRAM_DIR"
+        source venv/bin/activate 2>/dev/null || true
+        
+        # Run with output capture to file
+        echo -e "${BLUE}Executing:${RESET} $ENGRAM_STARTUP --client-id server --data-dir $HOME/.engram"
+        "$ENGRAM_STARTUP" --client-id "server" --data-dir "$HOME/.engram" >$ERROR_LOG 2>&1 &
+        STARTUP_PID=$!
+        sleep 3
+        
+        # Check if process is still running (didn't crash)
+        if kill -0 $STARTUP_PID 2>/dev/null; then
+            echo -e "${GREEN}Engram service started with PID: $STARTUP_PID${RESET}"
+        else
+            echo -e "${RED}Engram service process started but terminated immediately${RESET}"
+            echo -e "${YELLOW}Error output:${RESET}"
+            if [ -f "$ERROR_LOG" ]; then
+                cat "$ERROR_LOG"
+            else
+                echo "No error log available"
+            fi
+            return 1
+        fi
     else
         echo -e "${RED}Engram startup script not found or not executable${RESET}"
         return 1
     fi
     
     # Verify service is running
-    ps aux | grep -q "engram.api.consolidated_server"
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}${BOLD}Engram consolidated service started successfully!${RESET}"
+    ps aux | grep "engram.api.consolidated_server" | grep -v "grep" > /dev/null 2>&1
+    PS_CHECK=$?
+    if [ $PS_CHECK -eq 0 ]; then
+        echo -e "${GREEN}${BOLD}Engram consolidated service verified running!${RESET}"
+        
+        # Try to wait for service to be fully ready
+        echo -e "${BLUE}Waiting for service to be fully ready...${RESET}"
+        for i in {1..5}; do
+            # Try to connect to the health endpoint
+            if curl -s "http://127.0.0.1:8000/health" > /dev/null 2>&1; then
+                echo -e "${GREEN}Service is responding to requests!${RESET}"
+                return 0
+            fi
+            sleep 1
+        done
+        
+        # Even if health check fails, return success if process is running
+        echo -e "${YELLOW}Service process is running but not responding to requests yet${RESET}"
         return 0
     else
         echo -e "${RED}Failed to start Engram consolidated service${RESET}"
@@ -204,6 +310,29 @@ start_engram_services() {
 # Main script execution
 echo -e "${BOLD}${BLUE}====== Claude with Engram (Client: $CLIENT_ID) ======${RESET}"
 
+# Check for essential packages only - don't try to install everything
+echo -e "${BLUE}Checking for essential packages...${RESET}"
+MISSING_PACKAGES=false
+
+for pkg in numpy uvicorn fastapi httpx; do
+    if ! python -c "import $pkg" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Package $pkg is not installed${RESET}"
+        MISSING_PACKAGES=true
+    fi
+done
+
+if [ "$MISSING_PACKAGES" = true ]; then
+    echo -e "${YELLOW}Some required packages are missing. You may need to install them manually:${RESET}"
+    echo -e "${YELLOW}   pip install numpy uvicorn fastapi httpx${RESET}"
+    read -p "Continue anyway? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+else
+    echo -e "${GREEN}All essential packages are installed.${RESET}"
+fi
+
 # Check if services are running
 check_engram_running
 status=$?
@@ -212,7 +341,12 @@ status=$?
 if [ $status -ne 0 ]; then
     echo -e "${YELLOW}Engram services need to be started${RESET}"
     start_engram_services
-    if [ $? -ne 0 ]; then
+    
+    # Re-check after starting
+    ENGRAM_PIDS=$(pgrep -f "engram.api.consolidated_server" 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$ENGRAM_PIDS" ]; then
+        echo -e "${GREEN}Engram services successfully started and running!${RESET}"
+    else
         echo -e "${RED}Failed to start Engram services. Claude will run without memory.${RESET}"
         if [ "$MEMORY_ONLY" = false ]; then
             read -p "Press Enter to continue anyway, or Ctrl+C to abort..."

@@ -21,15 +21,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger("engram.memory")
 
-# Try to import mem0 for vector storage (optional dependency)
+# Try to import mem0ai for vector storage (optional dependency)
+# Note: This is designed to work without mem0ai, falling back to file-based storage
 try:
-    import mem0
+    # First try direct import
+    import mem0ai
     HAS_MEM0 = True
-    logger.info("mem0 library found, using vector-based memory")
-    logger.info(f"Using mem0 version: {mem0.__version__}")
+    logger.info("mem0ai library found, using vector-based memory")
+    logger.info(f"Using mem0ai version: {mem0ai.__version__}")
+    
+    # Alias for compatibility with existing code
+    mem0 = mem0ai
 except ImportError:
-    HAS_MEM0 = False
-    logger.warning("mem0 library not found, using fallback memory implementation")
+    # Also try alternative import in case it's installed as mem0
+    try:
+        import mem0
+        HAS_MEM0 = True
+        logger.info("mem0 library found, using vector-based memory")
+        logger.info(f"Using mem0 version: {mem0.__version__}")
+    except ImportError:
+        HAS_MEM0 = False
+        logger.warning("Vector storage library not found, using fallback file-based implementation")
+        logger.info("Memory will still work but without vector search capabilities")
 
 class MemoryService:
     """
@@ -89,8 +102,8 @@ class MemoryService:
                     memory_name = f"engram-{client_id}-{namespace}"
                     
                     # Create Memory object with collection name
-                    from mem0.configs.base import MemoryConfig
-                    from mem0.configs.vector_store import VectorStoreConfig, QdrantConfig
+                    from mem0ai.configs.base import MemoryConfig
+                    from mem0ai.configs.vector_store import VectorStoreConfig, QdrantConfig
                     
                     # Configure vector store with the namespace as collection name
                     vector_config = VectorStoreConfig(
@@ -114,14 +127,15 @@ class MemoryService:
                     self._ensure_compartment_memory(compartment_id)
                 
                 self.mem0_available = True
-                logger.info(f"Initialized mem0 MemoryClient for client {client_id}")
+                logger.info(f"Initialized mem0ai MemoryClient for client {client_id}")
             except Exception as e:
-                logger.error(f"Error initializing mem0: {e}")
+                logger.error(f"Error initializing mem0ai: {e}")
                 self.mem0_available = False
         
         # Initialize fallback storage
         if not self.mem0_available:
-            logger.info(f"Using fallback memory implementation for client {client_id}")
+            logger.info(f"Using fallback file-based memory implementation for client {client_id}")
+            logger.info(f"All memory features will work but without vector search capabilities")
             self.fallback_file = self.data_dir / f"{client_id}-memories.json"
             
             # Load existing memories if available
@@ -584,8 +598,8 @@ class MemoryService:
             # Create Memory object with collection name
             memory_name = f"engram-{self.client_id}-{namespace}"
             
-            from mem0.configs.base import MemoryConfig
-            from mem0.configs.vector_store import VectorStoreConfig, QdrantConfig
+            from mem0ai.configs.base import MemoryConfig
+            from mem0ai.configs.vector_store import VectorStoreConfig, QdrantConfig
             
             # Configure vector store with the namespace as collection name
             vector_config = VectorStoreConfig(
@@ -605,7 +619,7 @@ class MemoryService:
             self.namespace_memories[namespace] = mem0.Memory(config=memory_config)
             return True
         except Exception as e:
-            logger.error(f"Error creating memory for compartment {compartment_id}: {e}")
+            logger.error(f"Error creating mem0ai memory for compartment {compartment_id}: {e}")
             return False
     
     async def create_compartment(self, name: str, description: str = None, parent: str = None) -> Optional[str]:

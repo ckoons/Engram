@@ -365,7 +365,16 @@ def display_status_report(services_status: Dict[str, Any],
     print(f"  Memory Server: {memory_status} (PID: {services_status['memory_server']['pid']})")
     print(f"  HTTP Wrapper: {http_status} (PID: {services_status['http_wrapper']['pid']})")
     print(f"  Memory Connection: {'✅ Connected' if services_status['memory_connected'] else '❌ Not Connected'}")
-    print(f"  mem0 Integration: {mem0_status}")
+    print(f"  mem0ai Integration: {mem0_status}")
+    
+    # Try to get mem0ai version if available
+    try:
+        import mem0ai
+        print(f"  mem0ai Version: {GREEN}{mem0ai.__version__}{RESET}")
+    except ImportError:
+        print(f"  mem0ai Version: {RED}Not installed{RESET}")
+    except Exception as e:
+        print(f"  mem0ai Version: {YELLOW}Error checking version: {e}{RESET}")
     
     # Version Information
     if version_info:

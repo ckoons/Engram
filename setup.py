@@ -22,9 +22,9 @@ requirements = [
     "pydantic>=2.4.2",
 ]
 
-# Optional requirements
+# Optional requirements (mem0ai provides vector-based memory capabilities)
 extras_require = {
-    "vector": ["mem0ai>=0.1.65"],
+    "vector": ["mem0ai==0.1.67"],
 }
 
 setup(
