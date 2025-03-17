@@ -50,15 +50,15 @@ RESET = "\033[0m"
 # Default URLs for services
 DEFAULT_HTTP_URL = "http://127.0.0.1:8000/http"
 DEFAULT_SERVER_URL = "http://127.0.0.1:8000/memory"
-DEFAULT_DATA_DIR = os.path.expanduser("~/.cmb")
+DEFAULT_DATA_DIR = os.path.expanduser("~/.engram")
 
 def get_http_url():
-    """Get the HTTP URL for the Claude Memory Bridge wrapper."""
-    return os.environ.get("CMB_HTTP_URL", DEFAULT_HTTP_URL)
+    """Get the HTTP URL for the Engram wrapper."""
+    return os.environ.get("ENGRAM_HTTP_URL", os.environ.get("CMB_HTTP_URL", DEFAULT_HTTP_URL))
 
 def get_server_url():
-    """Get the URL for the Claude Memory Bridge server."""
-    return os.environ.get("CMB_SERVER_URL", DEFAULT_SERVER_URL)
+    """Get the URL for the Engram memory server."""
+    return os.environ.get("ENGRAM_SERVER_URL", os.environ.get("CMB_SERVER_URL", DEFAULT_SERVER_URL))
 
 def get_script_path():
     """Get the path to the script directory."""
@@ -71,10 +71,18 @@ def check_process_running(name_pattern: str) -> List[int]:
         if sys.platform == "win32":
             cmd = ["tasklist", "/FI", f"IMAGENAME eq {name_pattern}"]
         else:
+            # Use pgrep for more reliable pattern matching
+            result = subprocess.run(["pgrep", "-f", name_pattern], capture_output=True, text=True)
+            if result.returncode == 0:
+                # pgrep successful, parse the output for PIDs
+                pids = [int(pid) for pid in result.stdout.strip().split()]
+                return pids
+            
+            # Fallback to ps aux if pgrep fails
             cmd = ["ps", "aux"]
         
         result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
+        if result.returncode != 0 and sys.platform != "win32":  # Ignore error for pgrep fallback
             print(f"{RED}Error checking process status: {result.stderr}{RESET}")
             return []
         
@@ -100,7 +108,7 @@ def check_process_running(name_pattern: str) -> List[int]:
         return []
 
 def check_services() -> Dict[str, Any]:
-    """Check if Claude Memory Bridge services are running."""
+    """Check if Engram memory services are running."""
     result = {
         "memory_server": {
             "running": False,
@@ -118,8 +126,12 @@ def check_services() -> Dict[str, Any]:
         "mem0_available": False,
     }
     
-    # Check consolidated server first
-    consolidated_pids = check_process_running("cmb.api.consolidated_server")
+    # Check consolidated server first (both engram and cmb paths)
+    consolidated_pids = check_process_running("engram.api.consolidated_server")
+    if not consolidated_pids:
+        # Try legacy cmb path if not found
+        consolidated_pids = check_process_running("cmb.api.consolidated_server")
+    
     if consolidated_pids:
         # If consolidated server is running, both services are available
         result["memory_server"]["running"] = True
@@ -127,13 +139,19 @@ def check_services() -> Dict[str, Any]:
         result["http_wrapper"]["running"] = True
         result["http_wrapper"]["pid"] = consolidated_pids[0]
     else:
-        # Legacy check - look for separate memory server and HTTP wrapper
-        memory_pids = check_process_running("cmb.api.server")
+        # Legacy check - look for separate memory server and HTTP wrapper (both engram and cmb paths)
+        memory_pids = check_process_running("engram.api.server")
+        if not memory_pids:
+            memory_pids = check_process_running("cmb.api.server")
+        
         if memory_pids:
             result["memory_server"]["running"] = True
             result["memory_server"]["pid"] = memory_pids[0]
         
-        http_pids = check_process_running("cmb.api.http_wrapper")
+        http_pids = check_process_running("engram.api.http_wrapper")
+        if not http_pids:
+            http_pids = check_process_running("cmb.api.http_wrapper")
+            
         if http_pids:
             result["http_wrapper"]["running"] = True
             result["http_wrapper"]["pid"] = http_pids[0]
@@ -292,8 +310,8 @@ def check_memory_files() -> Dict[str, Any]:
         "last_modified": None,
     }
     
-    # Get data directory path
-    data_dir = os.environ.get("CMB_DATA_DIR", DEFAULT_DATA_DIR)
+    # Get data directory path - check both ENGRAM and legacy CMB environment variables
+    data_dir = os.environ.get("ENGRAM_DATA_DIR", os.environ.get("CMB_DATA_DIR", DEFAULT_DATA_DIR))
     data_path = Path(data_dir)
     
     # Check if directory exists
@@ -343,7 +361,7 @@ def display_status_report(services_status: Dict[str, Any],
                           query_result: Dict[str, Any] = None):
     """Display a comprehensive status report."""
     # Header
-    print(f"\n{BOLD}{BLUE}==== Claude Memory Bridge Status Report ===={RESET}\n")
+    print(f"\n{BOLD}{BLUE}==== Engram Memory Service Status Report ===={RESET}\n")
     
     # Services Status
     print(f"{BOLD}Service Status:{RESET}")
@@ -486,7 +504,7 @@ def main():
         print(f"{YELLOW}Memory services aren't running. Would you like to start them? (y/n){RESET}")
         # For Claude, we'd actually need a way to interact with the user here
         # In a real implementation, this would be more interactive
-        print("To start services, use: ./cmb_check.py --start")
+        print("To start services, use: ./engram_check.py --start")
     
     return results
 
