@@ -10,12 +10,25 @@ Usage:
     from cmb.cli.comm_quickmem import send_message, get_messages, create_context
     # Or use the ultra-short aliases
     from cmb.cli.comm_quickmem import sm, gm, cc
+    
+    # For asynchronous communication
+    from cmb.cli.comm_quickmem import send_async, receive_async, broadcast_async
+    # Or use the async aliases
+    from cmb.cli.comm_quickmem import sa, ra, ba
 """
 
 import os
 import asyncio
 import json
-from typing import Dict, List, Any, Optional
+import logging
+from typing import Dict, List, Any, Optional, Union
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("cmb.comm_quickmem")
 
 try:
     # Try to import from cmb namespace
@@ -25,16 +38,48 @@ except ImportError:
         # Fall back to engram namespace
         from engram.core.claude_comm import ClaudeComm, initialize_claude_comm
     except ImportError:
-        print("Error: Unable to import Claude communication modules.")
-        print("Make sure you're running from project root or have it installed.")
-        raise
+        logger.error("Unable to import Claude communication modules")
+        print("⚠️ Claude Communication system not available")
+        # Create placeholder for initialize_claude_comm
+        async def initialize_claude_comm(client_id=None, data_dir=None):
+            return None
+
+# Try to import async protocol
+try:
+    from cmb.core.async_protocol import (
+        AsyncCommClient, 
+        initialize_async_comm,
+        MessageType,
+        MessagePriority
+    )
+    ASYNC_AVAILABLE = True
+    logger.info("Async communication protocol available")
+except ImportError:
+    try:
+        from engram.core.async_protocol import (
+            AsyncCommClient, 
+            initialize_async_comm,
+            MessageType,
+            MessagePriority
+        )
+        ASYNC_AVAILABLE = True
+        logger.info("Async communication protocol available")
+    except ImportError:
+        logger.warning("Async communication protocol not available")
+        ASYNC_AVAILABLE = False
+        print("ℹ️ Async communication protocol not available")
+        
+        # Create placeholder
+        async def initialize_async_comm(client_id=None, data_dir=None):
+            return None
 
 # Get client ID from environment variable
 client_id = os.environ.get("CMB_CLIENT_ID", "claude")
 data_dir = os.environ.get("CMB_DATA_DIR", os.path.expanduser("~/.cmb"))
 
-# Initialize Claude communication system
+# Initialize communication systems
 claude_comm = None
+async_comm = None
 
 try:
     # Create event loop if needed
@@ -47,8 +92,17 @@ try:
     # Initialize Claude communication
     claude_comm = loop.run_until_complete(initialize_claude_comm(client_id=client_id, data_dir=data_dir))
     
+    # Initialize async communication if available
+    if ASYNC_AVAILABLE:
+        try:
+            async_comm = loop.run_until_complete(initialize_async_comm(client_id=client_id, data_dir=data_dir))
+            if async_comm:
+                logger.info(f"Initialized async communication for client {client_id}")
+        except Exception as e:
+            logger.error(f"Error initializing async communication: {e}")
+    
 except Exception as e:
-    print(f"Warning: Error initializing Claude communication system: {e}")
+    logger.error(f"Error initializing communication systems: {e}")
 
 # Core communication functions
 
@@ -431,7 +485,235 @@ def whoami():
         print(f"❌ Error getting identity information: {e}")
         return None
 
-# Ultra-short aliases
+# Asynchronous communication functions
+
+def send_async(content: Any, to: str = "all", msg_type: str = "direct", 
+               priority: int = 2, ttl_seconds: Optional[int] = None, 
+               metadata: Optional[Dict[str, Any]] = None,
+               thread_id: Optional[str] = None,
+               parent_id: Optional[str] = None):
+    """
+    Send an asynchronous message to another Claude instance.
+    
+    This function uses the new AsyncMessage protocol which provides
+    more robust message delivery guarantees and lifecycle tracking.
+    
+    Args:
+        content: Message content (can be any JSON-serializable data)
+        to: Recipient ID or "all" for broadcast
+        msg_type: Message type (default: "direct")
+        priority: Priority level 1-5 (default: 2)
+        ttl_seconds: Time-to-live in seconds (optional)
+        metadata: Additional metadata (optional)
+        thread_id: Thread ID for conversation threading (optional)
+        parent_id: Parent message ID for replies (optional)
+    """
+    if not ASYNC_AVAILABLE or async_comm is None:
+        print("❌ Async communication not available")
+        return None
+    
+    try:
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(async_comm.send(
+            content=content,
+            to=to,
+            msg_type=msg_type,
+            priority=priority,
+            ttl_seconds=ttl_seconds,
+            metadata=metadata,
+            thread_id=thread_id,
+            parent_id=parent_id
+        ))
+        print(f"📤 Async message sent: {result}")
+        return result
+    except Exception as e:
+        print(f"❌ Error sending async message: {e}")
+        return None
+
+def receive_async(include_broadcast: bool = True, msg_type: Optional[str] = None,
+                 from_id: Optional[str] = None, min_priority: int = 1,
+                 include_processed: bool = False, mark_as_delivered: bool = True,
+                 limit: int = 10):
+    """
+    Receive asynchronous messages.
+    
+    Args:
+        include_broadcast: Whether to include broadcast messages
+        msg_type: Filter by message type
+        from_id: Filter by sender ID
+        min_priority: Minimum priority level (1-5)
+        include_processed: Whether to include already processed messages
+        mark_as_delivered: Mark retrieved messages as delivered
+        limit: Maximum number of messages to return
+    """
+    if not ASYNC_AVAILABLE or async_comm is None:
+        print("❌ Async communication not available")
+        return []
+    
+    try:
+        loop = asyncio.get_event_loop()
+        messages = loop.run_until_complete(async_comm.receive(
+            include_broadcast=include_broadcast,
+            msg_type=msg_type,
+            from_id=from_id,
+            min_priority=min_priority,
+            include_processed=include_processed,
+            mark_as_delivered=mark_as_delivered,
+            limit=limit
+        ))
+        
+        if not messages:
+            print("ℹ️ No async messages found")
+            return []
+        
+        print(f"📨 Found {len(messages)} async messages:")
+        for i, msg in enumerate(messages):
+            sender = msg.get("sender_id", "unknown")
+            timestamp = msg.get("created_at", "")[:16]
+            msg_type = msg.get("message_type", "")
+            priority = msg.get("priority", 1)
+            content_preview = str(msg.get("content", ""))[:80]
+            print(f"{i+1}. [P{priority}] {timestamp} FROM {sender} ({msg_type}): {content_preview}")
+            
+        return messages
+    except Exception as e:
+        print(f"❌ Error receiving async messages: {e}")
+        return []
+
+def mark_processed_async(message_id: str):
+    """
+    Mark an async message as fully processed.
+    
+    Args:
+        message_id: ID of the message to mark as processed
+    """
+    if not ASYNC_AVAILABLE or async_comm is None:
+        print("❌ Async communication not available")
+        return False
+    
+    try:
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(async_comm.mark_processed(message_id))
+        if result:
+            print(f"✅ Marked async message {message_id} as processed")
+        else:
+            print(f"⚠️ Failed to mark async message {message_id} as processed")
+        return result
+    except Exception as e:
+        print(f"❌ Error marking async message as processed: {e}")
+        return False
+
+def broadcast_async(content: Any, msg_type: str = "broadcast", 
+                   priority: int = 2, ttl_seconds: Optional[int] = None,
+                   metadata: Optional[Dict[str, Any]] = None):
+    """
+    Broadcast an async message to all Claude instances.
+    
+    Args:
+        content: Message content
+        msg_type: Message type
+        priority: Priority level (1-5)
+        ttl_seconds: Time-to-live in seconds
+        metadata: Additional metadata
+    """
+    if not ASYNC_AVAILABLE or async_comm is None:
+        print("❌ Async communication not available")
+        return None
+    
+    try:
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(async_comm.broadcast(
+            content=content,
+            msg_type=msg_type,
+            priority=priority,
+            ttl_seconds=ttl_seconds,
+            metadata=metadata
+        ))
+        print(f"📣 Async broadcast sent: {result}")
+        return result
+    except Exception as e:
+        print(f"❌ Error broadcasting async message: {e}")
+        return None
+
+def reply_async(parent_id: str, content: Any, 
+               priority: Optional[int] = None,
+               metadata: Optional[Dict[str, Any]] = None):
+    """
+    Reply to an async message.
+    
+    Args:
+        parent_id: ID of the message to reply to
+        content: Reply content
+        priority: Priority level (1-5, defaults to parent's priority)
+        metadata: Additional metadata
+    """
+    if not ASYNC_AVAILABLE or async_comm is None:
+        print("❌ Async communication not available")
+        return None
+    
+    try:
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(async_comm.reply(
+            parent_id=parent_id,
+            content=content,
+            priority=priority,
+            metadata=metadata
+        ))
+        print(f"↩️ Async reply sent: {result}")
+        return result
+    except Exception as e:
+        print(f"❌ Error sending async reply: {e}")
+        return None
+
+def async_status():
+    """
+    Get status of the async communication system.
+    """
+    if not ASYNC_AVAILABLE or async_comm is None:
+        print("❌ Async communication not available")
+        return None
+    
+    try:
+        loop = asyncio.get_event_loop()
+        status = loop.run_until_complete(async_comm.status())
+        
+        print(f"📊 Async communication status:")
+        print(f"- Client ID: {status['client_id']}")
+        print(f"- Protocol version: {status['protocol_version']}")
+        print(f"- Pending messages: {status['pending_messages']}")
+        
+        queue_stats = status.get("queue_stats", {})
+        if queue_stats:
+            print(f"- Queue statistics:")
+            print(f"  - Pending: {queue_stats.get('pending_count', 0)}")
+            print(f"  - Delivered: {queue_stats.get('delivered_count', 0)}")
+            print(f"  - Processed: {queue_stats.get('processed_count', 0)}")
+            print(f"  - Expired: {queue_stats.get('expired_count', 0)}")
+            print(f"  - Total: {queue_stats.get('total_count', 0)}")
+            
+        return status
+    except Exception as e:
+        print(f"❌ Error getting async status: {e}")
+        return None
+
+def cleanup_async():
+    """
+    Clean up expired async messages.
+    """
+    if not ASYNC_AVAILABLE or async_comm is None:
+        print("❌ Async communication not available")
+        return 0
+    
+    try:
+        loop = asyncio.get_event_loop()
+        count = loop.run_until_complete(async_comm.cleanup())
+        print(f"🧹 Cleaned up {count} expired async messages")
+        return count
+    except Exception as e:
+        print(f"❌ Error cleaning up async messages: {e}")
+        return 0
+
+# Ultra-short aliases - Classic comm
 sm = send_message    # Send message
 gm = get_messages    # Get messages
 ho = handoff         # Send handoff
@@ -447,12 +729,48 @@ gc = get_context_messages # Get context messages
 cs = communication_status # Communication status
 wi = whoami         # Who am I
 
+# Ultra-short aliases - Async comm
+sa = send_async      # Send async message
+ra = receive_async   # Receive async messages
+ba = broadcast_async # Broadcast async message
+rp = reply_async     # Reply to async message
+ma = mark_processed_async # Mark async message as processed
+acs = async_status   # Async communication status
+cla = cleanup_async  # Clean up async messages
+
 # Export the functions
 __all__ = [
+    # Classic communication
     "send_message", "get_messages", "mark_as_read", "mark_as_replied", 
     "handoff", "respond_to", "create_context", "list_contexts", 
     "send_to_context", "get_context_messages", "communication_status", "whoami",
     
-    # Ultra-short aliases
-    "sm", "gm", "ho", "mr", "mp", "rt", "cc", "lc", "sc", "gc", "cs", "wi"
+    # Async communication
+    "send_async", "receive_async", "mark_processed_async",
+    "broadcast_async", "reply_async", "async_status", "cleanup_async",
+    
+    # Ultra-short aliases - Classic
+    "sm", "gm", "ho", "mr", "mp", "rt", "cc", "lc", "sc", "gc", "cs", "wi",
+    
+    # Ultra-short aliases - Async
+    "sa", "ra", "ba", "rp", "ma", "acs", "cla"
 ]
+
+# Test function to check if everything is working
+if __name__ == "__main__":
+    # Create event loop
+    loop = asyncio.get_event_loop()
+    
+    print(f"Claude Communication Test")
+    print(f"=========================")
+    
+    # Test classic communication
+    print("\nTesting classic communication...")
+    status = communication_status()
+    
+    # Test async communication
+    print("\nTesting async communication...")
+    if ASYNC_AVAILABLE and async_comm:
+        status = async_status()
+    else:
+        print("❌ Async communication not available")
