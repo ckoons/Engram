@@ -54,11 +54,11 @@ DEFAULT_DATA_DIR = os.path.expanduser("~/.engram")
 
 def get_http_url():
     """Get the HTTP URL for the Engram wrapper."""
-    return os.environ.get("ENGRAM_HTTP_URL", os.environ.get("CMB_HTTP_URL", DEFAULT_HTTP_URL))
+    return os.environ.get("ENGRAM_HTTP_URL", DEFAULT_HTTP_URL)
 
 def get_server_url():
     """Get the URL for the Engram memory server."""
-    return os.environ.get("ENGRAM_SERVER_URL", os.environ.get("CMB_SERVER_URL", DEFAULT_SERVER_URL))
+    return os.environ.get("ENGRAM_SERVER_URL", DEFAULT_SERVER_URL)
 
 def get_script_path():
     """Get the path to the script directory."""
@@ -126,11 +126,8 @@ def check_services() -> Dict[str, Any]:
         "mem0_available": False,
     }
     
-    # Check consolidated server first (both engram and cmb paths)
+    # Check consolidated server
     consolidated_pids = check_process_running("engram.api.consolidated_server")
-    if not consolidated_pids:
-        # Try legacy cmb path if not found
-        consolidated_pids = check_process_running("cmb.api.consolidated_server")
     
     if consolidated_pids:
         # If consolidated server is running, both services are available
@@ -139,18 +136,14 @@ def check_services() -> Dict[str, Any]:
         result["http_wrapper"]["running"] = True
         result["http_wrapper"]["pid"] = consolidated_pids[0]
     else:
-        # Legacy check - look for separate memory server and HTTP wrapper (both engram and cmb paths)
+        # Legacy check - look for separate memory server and HTTP wrapper
         memory_pids = check_process_running("engram.api.server")
-        if not memory_pids:
-            memory_pids = check_process_running("cmb.api.server")
         
         if memory_pids:
             result["memory_server"]["running"] = True
             result["memory_server"]["pid"] = memory_pids[0]
         
         http_pids = check_process_running("engram.api.http_wrapper")
-        if not http_pids:
-            http_pids = check_process_running("cmb.api.http_wrapper")
             
         if http_pids:
             result["http_wrapper"]["running"] = True
@@ -281,7 +274,7 @@ def check_version() -> Dict[str, Any]:
     # Get current version from code
     try:
         script_path = get_script_path()
-        version_path = os.path.join(script_path, "cmb", "__init__.py")
+        version_path = os.path.join(script_path, "engram", "__init__.py")
         with open(version_path, "r") as f:
             version_file = f.read()
             for line in version_file.split("\n"):
@@ -310,8 +303,8 @@ def check_memory_files() -> Dict[str, Any]:
         "last_modified": None,
     }
     
-    # Get data directory path - check both ENGRAM and legacy CMB environment variables
-    data_dir = os.environ.get("ENGRAM_DATA_DIR", os.environ.get("CMB_DATA_DIR", DEFAULT_DATA_DIR))
+    # Get data directory path
+    data_dir = os.environ.get("ENGRAM_DATA_DIR", DEFAULT_DATA_DIR)
     data_path = Path(data_dir)
     
     # Check if directory exists
@@ -416,7 +409,7 @@ def display_status_report(services_status: Dict[str, Any],
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Claude Memory Bridge Status Checker")
+    parser = argparse.ArgumentParser(description="Engram Memory Status Checker")
     
     # Action arguments
     action_group = parser.add_mutually_exclusive_group()

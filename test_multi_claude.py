@@ -22,12 +22,12 @@ class MultiClaudeTest:
     def __init__(self, client_id=None):
         """Initialize the test interface."""
         # Get client ID from environment or parameter
-        self.client_id = client_id or os.environ.get("CMB_CLIENT_ID", "unknown")
+        self.client_id = client_id or os.environ.get("ENGRAM_CLIENT_ID", "unknown")
         print(f"Client ID: {self.client_id}")
         
         # Import communication functions
         try:
-            from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+            from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
             self.sm = sm  # Send message
             self.gm = gm  # Get messages
             self.ho = ho  # Handoff message
@@ -143,12 +143,12 @@ class MultiClaudeTest:
 def main():
     """Main entry point."""
     # Get client ID from environment
-    client_id = os.environ.get("CMB_CLIENT_ID")
+    client_id = os.environ.get("ENGRAM_CLIENT_ID")
     
     # If not set, prompt for client ID
     if not client_id:
         client_id = input("Enter your Claude client ID: ")
-        os.environ["CMB_CLIENT_ID"] = client_id
+        os.environ["ENGRAM_CLIENT_ID"] = client_id
     
     # Create test interface
     test = MultiClaudeTest(client_id)

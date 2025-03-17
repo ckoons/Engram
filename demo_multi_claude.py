@@ -23,9 +23,9 @@ sys.path.insert(0, script_dir)
 
 # Import required modules
 try:
-    from cmb.cli.claude_launcher import launch_claude, save_process_info
-    from cmb.core.behavior_logger import BehaviorLogger
-    from cmb.core.report_generator import MultiClaudeReport
+    from engram.cli.claude_launcher import launch_claude, save_process_info
+    from engram.core.behavior_logger import BehaviorLogger
+    from engram.core.report_generator import MultiClaudeReport
 except ImportError as e:
     print(f"Error importing required modules: {e}")
     print("Make sure you have the Engram project installed correctly.")
@@ -33,7 +33,7 @@ except ImportError as e:
 
 # Configuration
 CLIENT_IDS = ["claude1", "claude2"]
-DATA_DIR = os.path.expanduser("~/.cmb")
+DATA_DIR = os.path.expanduser("~/.engram")
 
 async def setup_memory_service():
     """Start the memory service if it's not already running."""

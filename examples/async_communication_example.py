@@ -21,7 +21,7 @@ sys.path.insert(0, project_root)
 
 # Try to import the async communication functions
 try:
-    from cmb.cli.comm_quickmem import (
+    from engram.cli.comm_quickmem import (
         # Full function names
         send_async,
         receive_async,
@@ -46,7 +46,7 @@ async def example_send():
     print("\n🔹 Example: Sending an async message")
     
     # Get client ID from environment or use default
-    client_id = os.environ.get("CMB_CLIENT_ID", "claude")
+    client_id = os.environ.get("ENGRAM_CLIENT_ID", "claude")
     print(f"- Using client ID: {client_id}")
     
     # Send a message to all instances

@@ -87,23 +87,23 @@ start_memory("Project Work Session")  # Loads memories and starts session
 
 ```bash
 # Start the consolidated server (combines memory and HTTP on a single port)
-./cmb_consolidated
+./engram_consolidated
 
-# OR use the cmb_check script which now uses the consolidated server
-./cmb_check.py --start
+# OR use the engram_check script which now uses the consolidated server
+./engram_check.py --start
 
 # In your Claude session, access memories with QuickMem:
-from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
+from engram.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
 ```
 
 ### Option 3: Legacy Mode (Separate Services)
 
 ```bash
-# Start memory bridge and HTTP services separately
-./cmb_start_all
+# Start memory service and HTTP services separately
+./engram_start_all
 
 # In your Claude session, access memories with QuickMem:
-from cmb.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
+from engram.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
 
 # Auto-load previous memories and start session in one command
 o()

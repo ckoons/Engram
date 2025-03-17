@@ -17,8 +17,8 @@ from pathlib import Path
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, script_dir)
 
-from cmb.core.crypto import CryptoManager
-from cmb.cli.quickmem import private, review_private, p, v
+from engram.core.crypto import CryptoManager
+from engram.cli.quickmem import private, review_private, p, v
 
 # Colors for terminal output
 GREEN = "\033[92m"
@@ -199,7 +199,7 @@ def test_quickmem_privacy():
 
 def main():
     """Run all privacy tests."""
-    print(f"{BOLD}{BLUE}==== Claude Memory Bridge Privacy Tests ===={RESET}\n")
+    print(f"{BOLD}{BLUE}==== Engram Memory Privacy Tests ===={RESET}\n")
     
     # Test CryptoManager
     crypto_success = test_crypto_manager()

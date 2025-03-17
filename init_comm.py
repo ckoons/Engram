@@ -7,7 +7,7 @@ import os
 import sys
 
 # Get client ID from environment
-client_id = os.environ.get("CMB_CLIENT_ID", "unknown")
+client_id = os.environ.get("ENGRAM_CLIENT_ID", "unknown")
 print(f"Client ID: {client_id}")
 
 # Add project directory to Python path
@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import Claude-to-Claude communication functions
 try:
-    from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+    from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
     print("✅ Communication functions loaded!")
     print("Functions available:")
     print("  sm() - Send message")

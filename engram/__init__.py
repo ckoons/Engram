@@ -5,4 +5,4 @@ A lightweight system providing AI with persistent memory traces,
 enabling continuous conversation and growth across sessions.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.6.0"

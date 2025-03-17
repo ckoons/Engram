@@ -7,4 +7,4 @@ This package contains API implementations for the Engram memory system, includin
 - Consolidated server combining multiple services
 """
 
-__version__ = "0.2.0"
+__version__ = "0.6.0"

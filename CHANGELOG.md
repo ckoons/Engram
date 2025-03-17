@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2025-03-17
+
+### Changed
+- Completed migration from CMB to Engram namespace
+- Removed all CMB references from scripts and documentation
+- Updated import statements to use engram namespace exclusively
+- Removed legacy CMB entry point from setup.py
+- Updated process detection to only look for engram processes
+
+### Fixed
+- Fixed import paths in engram_start_web script
+- Updated environment variable references to use ENGRAM_ prefix
+- Standardized script naming conventions
+
 ## [0.5.0] - 2025-03-15
 
 ### Added

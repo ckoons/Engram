@@ -2,8 +2,8 @@
 from setuptools import setup, find_packages
 import os
 
-# Read version from cmb/__init__.py
-with open(os.path.join("cmb", "__init__.py"), "r") as f:
+# Read version from engram/__init__.py
+with open(os.path.join("engram", "__init__.py"), "r") as f:
     for line in f:
         if line.startswith("__version__"):
             version = line.split("=")[1].strip().strip('"\'')
@@ -28,16 +28,16 @@ extras_require = {
 }
 
 setup(
-    name="claude-memory-bridge",
+    name="engram",
     version=version,
-    description="A bridge connecting Claude AI to persistent memory",
+    description="Persistent Memory Traces for AI Assistants",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Casey Koons",
     author_email="cskoons@gmail.com",
-    url="https://github.com/cskoons/ClaudeMemoryBridge",
+    url="https://github.com/cskoons/Engram",
     packages=find_packages(),
-    scripts=["cmb"],
+    scripts=["engram_consolidated", "engram_start.sh"],
     install_requires=requirements,
     extras_require=extras_require,
     python_requires=">=3.8",
@@ -53,7 +53,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "cmb-server=cmb.api.server:main",
+            "engram-server=engram.api.server:main",
         ],
     },
 )

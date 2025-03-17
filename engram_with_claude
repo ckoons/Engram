@@ -55,22 +55,36 @@ ENGRAM_CHECK="$ENGRAM_DIR/engram_check.py"
 ENGRAM_STARTUP="$ENGRAM_DIR/engram_consolidated" # Use consolidated server
 
 # Memory import for Claude - includes client ID
-MEMORY_IMPORT="from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z; print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\"); status = s(); previous = l(3); print(\"\")"
+MEMORY_IMPORT="from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z; print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\"); status = s(); previous = l(3); print(\"\")"
 
-# Alternative import if cmb module isn't found
+# Alternative import with engram namespace support
 ALT_MEMORY_IMPORT="try:
     # Set client ID for this Claude instance
     import os
-    os.environ['CMB_CLIENT_ID'] = '${CLIENT_ID}'
+    os.environ['ENGRAM_CLIENT_ID'] = '${CLIENT_ID}'
     
-    # Load memory functions
-    from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-    
-    # Load Claude-to-Claude communication functions
-    from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-    
-    print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\")
-    print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
+    # Try to load from the new engram namespace first
+    try:
+        # Load memory functions
+        from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+        
+        # Load Claude-to-Claude communication functions
+        from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+        
+        print(\"${GREEN}💭 Memory functions loaded from engram package (Client: ${CLIENT_ID})!${RESET}\")
+        print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
+    except ImportError:
+        # Fall back to legacy cmb namespace
+        print(\"${YELLOW}⚠️ Using legacy cmb module path. Engram package not found.${RESET}\")
+        
+        # Load memory functions
+        from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+        
+        # Load Claude-to-Claude communication functions
+        from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+        
+        print(\"${GREEN}💭 Memory functions loaded from cmb package (Client: ${CLIENT_ID})!${RESET}\")
+        print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
     
     # Check status
     status = s()
@@ -81,28 +95,52 @@ ALT_MEMORY_IMPORT="try:
     my_id = wi()
     comm_status = cs()
 except ImportError:
-    print(\"${YELLOW}⚠️ Using legacy module path. Please update your code to use 'engram' instead of 'cmb'.${RESET}\")
+    print(\"${YELLOW}⚠️ Using direct module path. Adding Engram directory to Python path.${RESET}\")
     import sys
     import os
-    os.environ['CMB_CLIENT_ID'] = '${CLIENT_ID}'
+    os.environ['ENGRAM_CLIENT_ID'] = '${CLIENT_ID}'
     sys.path.insert(0, '$ENGRAM_DIR')
     
-    # Load memory functions
-    from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-    
-    # Try to load communication functions if available
+    # Try engram namespace first
     try:
-        from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-        print(\"${GREEN}💬 Claude communication functions loaded!${RESET}\")
+        # Load memory functions
+        from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
         
-        # Show communication status
-        print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
-        my_id = wi()
-        comm_status = cs()
+        # Try to load communication functions if available
+        try:
+            from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+            print(\"${GREEN}💬 Claude communication functions loaded from engram package!${RESET}\")
+            
+            # Show communication status
+            print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
+            my_id = wi()
+            comm_status = cs()
+        except ImportError:
+            print(\"${YELLOW}⚠️ Claude communication functions not available in engram package${RESET}\")
+        
+        print(\"${GREEN}💭 Memory functions loaded from engram package (Client: ${CLIENT_ID})!${RESET}\")
     except ImportError:
-        print(\"${YELLOW}⚠️ Claude communication functions not available${RESET}\")
+        # Fall back to legacy cmb namespace
+        print(\"${YELLOW}⚠️ Using legacy cmb module path.${RESET}\")
+        
+        # Load memory functions
+        from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+        
+        # Try to load communication functions if available
+        try:
+            from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+            print(\"${GREEN}💬 Claude communication functions loaded from cmb package!${RESET}\")
+            
+            # Show communication status
+            print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
+            my_id = wi()
+            comm_status = cs()
+        except ImportError:
+            print(\"${YELLOW}⚠️ Claude communication functions not available in cmb package${RESET}\")
+        
+        print(\"${GREEN}💭 Memory functions loaded from cmb package (Client: ${CLIENT_ID})!${RESET}\")
     
-    print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\")
+    # Check status
     status = s()
     previous = l(3)
 print(\"\")"
@@ -129,16 +167,16 @@ start_engram_services() {
     echo -e "${YELLOW}${BOLD}Starting Engram services...${RESET}"
     
     # Check if we should restart existing services
-    if ps aux | grep -q "cmb.api.consolidated_server"; then
+    if ps aux | grep -q "engram.api.consolidated_server"; then
         echo -e "${YELLOW}Engram services already running. We'll connect to the existing service.${RESET}"
         return 0
     fi
     
     # Kill any leftover services to ensure clean restart
     echo -e "${YELLOW}Stopping any leftover services...${RESET}"
-    pkill -f "cmb.api.server" >/dev/null 2>&1
-    pkill -f "cmb.api.http_wrapper" >/dev/null 2>&1
-    pkill -f "cmb.api.consolidated_server" >/dev/null 2>&1
+    pkill -f "engram.api.server" >/dev/null 2>&1
+    pkill -f "engram.api.http_wrapper" >/dev/null 2>&1
+    pkill -f "engram.api.consolidated_server" >/dev/null 2>&1
     sleep 1
     
     # Start consolidated memory service
@@ -153,7 +191,7 @@ start_engram_services() {
     fi
     
     # Verify service is running
-    ps aux | grep -q "cmb.api.consolidated_server"
+    ps aux | grep -q "engram.api.consolidated_server"
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}${BOLD}Engram consolidated service started successfully!${RESET}"
         return 0

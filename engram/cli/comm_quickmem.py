@@ -12,7 +12,7 @@ import json
 from typing import Dict, List, Optional, Any, Union
 
 # Configure client ID
-client_id = os.environ.get("ENGRAM_CLIENT_ID", os.environ.get("CMB_CLIENT_ID", "claude"))
+client_id = os.environ.get("ENGRAM_CLIENT_ID", "claude")
 
 # Import core components
 try:

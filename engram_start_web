@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --help)
-      echo "Usage: ./cmb_start_web [options]"
+      echo "Usage: ./engram_start_web [options]"
       echo ""
       echo "Options:"
       echo "  --host HOST      Host to bind the web UI to (default: 127.0.0.1)"
@@ -55,9 +55,9 @@ sleep 2
 echo "2. Starting web UI on $HOST:$PORT..."
 if [ "$DEBUG" = true ]; then
   echo "   Running in debug mode"
-  WEB_CMD="python -m cmb.web.app --host $HOST --port $PORT --debug"
+  WEB_CMD="python -m engram.web.app --host $HOST --port $PORT --debug"
 else
-  WEB_CMD="python -m cmb.web.app --host $HOST --port $PORT"
+  WEB_CMD="python -m engram.web.app --host $HOST --port $PORT"
 fi
 
 echo ""
@@ -69,7 +69,7 @@ echo "- Web UI:               http://$HOST:$PORT"
 echo ""
 echo "Access the web interface at: http://$HOST:$PORT"
 echo ""
-echo "To stop all services, run: pkill -f 'cmb.api.consolidated|cmb.web.app'"
+echo "To stop all services, run: pkill -f 'engram.api.consolidated|engram.web.app|engram_consolidated'"
 echo ""
 echo "Starting web UI in the foreground (press Ctrl+C to stop all services)..."
 echo ""

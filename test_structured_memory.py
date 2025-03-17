@@ -4,8 +4,8 @@ Test script for the structured memory system.
 """
 
 import asyncio
-from cmb.cli.quickmem import memory_digest, start_nexus, process_message, auto_remember, end_nexus
-from cmb.cli.quickmem import mem, think, write
+from engram.cli.quickmem import memory_digest, start_nexus, process_message, auto_remember, end_nexus
+from engram.cli.quickmem import mem, think, write
 
 async def main():
     # Test structured memory features

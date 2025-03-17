@@ -1,68 +1,31 @@
---- agenteer/core/memory/cmb_adapter.py.orig
+--- agenteer/core/memory/cmb_adapter.py
 +++ agenteer/core/memory/cmb_adapter.py
-@@ -22,24 +22,42 @@
- 
- # Try to import CMB packages
- try:
--    # Direct imports from ClaudeMemoryBridge
--    from cmb.cli.quickmem import (
--        status, process_message, start_nexus, end_nexus, auto_remember,
+@@ -25,20 +25,39 @@
+     # Direct imports from ClaudeMemoryBridge
+     from cmb.cli.quickmem import (
+         status, process_message, start_nexus, end_nexus, auto_remember,
 -        memory_digest, s, q, n, y, z, d
--    )
--    
--    # Check if we can import core modules directly
-+    # Try engram package first
-     try:
++        memory_digest, s, q, n, y, z, d,
+     )
+     
+     # Check if we can import core modules directly
+-    try:
 -        from cmb.core.structured_memory import StructuredMemory
 -        from cmb.core.nexus import NexusInterface
 -        from cmb.core.memory import MemoryService as CmbMemoryService
 -        HAS_CMB_CORE = True
-+        # Direct imports from Engram
-+        from engram.cli.quickmem import (
-+            status, process_message, start_nexus, end_nexus, auto_remember,
-+            memory_digest, s, q, n, y, z, d
-+        )
-+        
-+        # Check if we can import core modules directly
-+        try:
-+            from engram.core.structured_memory import StructuredMemory
-+            from engram.core.nexus import NexusInterface
-+            from engram.core.memory import MemoryService as CmbMemoryService
-+            HAS_CMB_CORE = True
-+        except ImportError:
-+            HAS_CMB_CORE = False
-+            
-+        HAS_CMB = True
-+        logger.info("Using Engram package for memory functionality")
-     except ImportError:
+-    except ImportError:
 -        HAS_CMB_CORE = False
--        
--    HAS_CMB = True
-+        # Fall back to legacy cmb package
-+        logger.warning("Engram package not found, falling back to legacy CMB package")
-+        try:
-+            from cmb.cli.quickmem import (
-+                status, process_message, start_nexus, end_nexus, auto_remember,
-+                memory_digest, s, q, n, y, z, d
-+            )
-+            
-+            # Check if we can import core modules directly
-+            try:
-+                from cmb.core.structured_memory import StructuredMemory
-+                from cmb.core.nexus import NexusInterface
-+                from cmb.core.memory import MemoryService as CmbMemoryService
-+                HAS_CMB_CORE = True
-+            except ImportError:
-+                HAS_CMB_CORE = False
-+            
-+            HAS_CMB = True
-+        except ImportError:
-+            HAS_CMB = False
-+            logger.warning("Neither Engram nor ClaudeMemoryBridge installed. Using fallback file-based memory.")
++    from cmb.core.structured_memory import StructuredMemory
++    from cmb.core.nexus import NexusInterface
++    from cmb.core.memory import MemoryService as CmbMemoryService
++    HAS_CMB_CORE = True
+         
+     HAS_CMB = True
  except ImportError:
      HAS_CMB = False
--    HAS_CMB_CORE = False
--    logger.warning("ClaudeMemoryBridge not installed. Using fallback file-based memory.")
+     HAS_CMB_CORE = False
+     logger.warning("ClaudeMemoryBridge not installed. Using fallback file-based memory.")
  
  # Default HTTP URL for the CMB wrapper if using HTTP API
 -DEFAULT_CMB_HTTP_URL = "http://127.0.0.1:8001"

@@ -10,7 +10,6 @@ try:
     # Set client ID for this Claude instance
     import os
     os.environ['ENGRAM_CLIENT_ID'] = 'claude'
-    os.environ['CMB_CLIENT_ID'] = 'claude'  # For backwards compatibility
     
     # Try to load from the new engram namespace first
     try:
@@ -23,17 +22,8 @@ try:
         print("\033[92m💭 Memory functions loaded from engram package (Client: claude)!\033[0m")
         print("\033[92m💬 Claude communication functions loaded!\033[0m")
     except ImportError:
-        # Fall back to legacy cmb namespace
-        print("\033[93m⚠️ Using legacy cmb module path. Engram package not found.\033[0m")
-        
-        # Load memory functions
-        from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-        
-        # Load Claude-to-Claude communication functions
-        from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-        
-        print("\033[92m💭 Memory functions loaded from cmb package (Client: claude)!\033[0m")
-        print("\033[92m💬 Claude communication functions loaded!\033[0m")
+        print("\033[93m⚠️ Engram package not found in import path.\033[0m")
+        print("\033[93m⚠️ Make sure Engram is installed or in your Python path.\033[0m")
     
     # Check status
     status = s()
@@ -53,7 +43,6 @@ except ImportError:
     import sys
     import os
     os.environ['ENGRAM_CLIENT_ID'] = 'claude'
-    os.environ['CMB_CLIENT_ID'] = 'claude'  # For backwards compatibility
     sys.path.insert(0, '/Users/cskoons/projects/github/Engram')
     
     # Try engram namespace first
@@ -75,25 +64,8 @@ except ImportError:
         
         print("\033[92m💭 Memory functions loaded from engram package (Client: claude)!\033[0m")
     except ImportError:
-        # Fall back to legacy cmb namespace
-        print("\033[93m⚠️ Using legacy cmb module path.\033[0m")
-        
-        # Load memory functions
-        from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-        
-        # Try to load communication functions if available
-        try:
-            from cmb.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-            print("\033[92m💬 Claude communication functions loaded from cmb package!\033[0m")
-            
-            # Show communication status
-            print("\n\033[94mClaude-to-Claude Communication Status:\033[0m")
-            my_id = wi()
-            comm_status = cs()
-        except ImportError:
-            print("\033[93m⚠️ Claude communication functions not available in cmb package\033[0m")
-        
-        print("\033[92m💭 Memory functions loaded from cmb package (Client: claude)!\033[0m")
+        print("\033[93m⚠️ Engram package not found in import path.\033[0m")
+        print("\033[93m⚠️ Make sure Engram is installed or in your Python path.\033[0m")
     
     # Check status
     status = s()

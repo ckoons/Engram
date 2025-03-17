@@ -30,11 +30,11 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 # Default HTTP URL for the memory service
-DEFAULT_HTTP_URL = "http://127.0.0.1:8001"
+DEFAULT_HTTP_URL = "http://127.0.0.1:8000/http"
 
 def _get_http_url():
     """Get the HTTP URL for the memory service."""
-    return os.environ.get("CMB_HTTP_URL", DEFAULT_HTTP_URL)
+    return os.environ.get("ENGRAM_HTTP_URL", DEFAULT_HTTP_URL)
 
 def _safe_string(text: str) -> str:
     """URL-encode a string to make it safe for GET requests."""
@@ -57,7 +57,7 @@ def start_service():
         
         # Try to find the service start script
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        check_script = os.path.join(script_dir, "cmb_check.py")
+        check_script = os.path.join(script_dir, "engram_check.py")
         
         if os.path.exists(check_script):
             import subprocess
@@ -65,7 +65,7 @@ def start_service():
             time.sleep(2)  # Wait for services to start
             return check_service()
         else:
-            print(f"{RED}Could not find cmb_check.py script to start services{RESET}")
+            print(f"{RED}Could not find engram_check.py script to start services{RESET}")
             return False
     except Exception as e:
         print(f"{RED}Error starting memory service: {e}{RESET}")
@@ -136,7 +136,7 @@ def start_memory(session_name=None):
     Args:
         session_name: Optional name for this session
     """
-    print(f"\n{BOLD}{BLUE}===== Claude Memory Bridge ====={RESET}")
+    print(f"\n{BOLD}{BLUE}===== Engram Memory Session ====={RESET}")
     
     # Check if service is running
     if not check_service():
@@ -158,7 +158,7 @@ def start_memory(session_name=None):
         think("I should maintain continuity from previous sessions and remember key information.")
     
     print(f"{BLUE}Memory functions are now available:{RESET}")
-    print(f"  - from cmb.cli.quickmem import * (for all functions)")
+    print(f"  - from engram.cli.quickmem import * (for all functions)")
     print(f"  - Use m() to search memories, t() for thoughts, r() to remember")
     print(f"{BOLD}{BLUE}===================================={RESET}\n")
     

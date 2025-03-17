@@ -13,7 +13,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, ".."))
 sys.path.insert(0, project_root)
 
-from cmb.cli.claude_helper import (
+from engram.cli.claude_helper import (
     check_health, 
     query_memory, 
     store_memory, 
@@ -23,7 +23,7 @@ from cmb.cli.claude_helper import (
 )
 
 # Import the quickmem module for the simplified interface
-from cmb.cli.quickmem import (
+from engram.cli.quickmem import (
     mem, think, remember, write, load, 
     compartment, keep, correct,
     # Short aliases
@@ -31,17 +31,17 @@ from cmb.cli.quickmem import (
 )
 
 def main():
-    """Run a demo showing how to use Claude Memory Bridge."""
-    print("Claude Memory Bridge Example\n")
+    """Run a demo showing how to use Engram Memory."""
+    print("Engram Memory Example\n")
     
-    # Check if the memory bridge is running
+    # Check if the memory service is running
     health = check_health()
     if health.get("status") != "ok":
-        print("Error: Memory Bridge is not running.")
-        print("Please start the memory bridge with: cmb")
+        print("Error: Engram Memory service is not running.")
+        print("Please start the memory service with: engram_consolidated")
         return
     
-    print(f"Connected to Memory Bridge (Client ID: {health.get('client_id')})\n")
+    print(f"Connected to Engram Memory (Client ID: {health.get('client_id')})\n")
     
     # Query existing memories
     print("Checking what I already know about Python...")

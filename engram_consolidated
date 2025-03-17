@@ -105,12 +105,8 @@ echo ""
 export PYTHONPATH=$SCRIPT_DIR:$PYTHONPATH
 
 # Build command with all available options
-# Try engram module first, fall back to cmb for backward compatibility
-if python -c "import engram.api.consolidated_server" 2>/dev/null; then
-    CMD="python -m engram.api.consolidated_server"
-else
-    CMD="python -m cmb.api.consolidated_server"
-fi
+# Use engram module
+CMD="python -m engram.api.consolidated_server"
 
 # Add config file if specified
 if [ -n "$CONFIG_PATH" ]; then

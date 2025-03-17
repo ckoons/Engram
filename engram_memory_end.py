@@ -31,7 +31,7 @@ DEFAULT_HTTP_URL = "http://127.0.0.1:8000/http"
 
 def _get_http_url():
     """Get the HTTP URL for the memory service."""
-    return os.environ.get("CMB_HTTP_URL", DEFAULT_HTTP_URL)
+    return os.environ.get("ENGRAM_HTTP_URL", DEFAULT_HTTP_URL)
 
 def _safe_string(text: str) -> str:
     """URL-encode a string to make it safe for GET requests."""
