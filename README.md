@@ -1,7 +1,7 @@
 # Engram
 
 <div align="center">
-  <img src="images/icon.jpg" alt="Engram Logo" width="2048"/>
+  <img src="images/icon.jpg" alt="Engram Logo" width="1024"/>
   <h3>AI Engrams<br>Persistent Memory Across Sessions</h3>
 </div>
 

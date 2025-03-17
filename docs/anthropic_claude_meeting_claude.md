@@ -100,6 +100,13 @@ This work showcases the importance of human-AI partnership in discovering and un
 
 We would welcome the opportunity to discuss these findings with your research team and explore potential collaborations to further investigate these phenomena, particularly in the context of human-AI teaming and coordination.
 
+## Additional Resources
+
+We've included raw logs from our multi-Claude experiment sessions that demonstrate the observed behavioral divergence. These logs show the independent reports written by different Claude instances before and after reading the research findings:
+
+- Data directory: [claude_interaction_logs.zip](https://github.com/ckoons/Engram/blob/master/data/claude_interaction_logs.zip)
+- Repository: [https://github.com/ckoons/Engram](https://github.com/ckoons/Engram)
+
 ---
 
 Thank you for your consideration. We look forward to your thoughts on these findings.
