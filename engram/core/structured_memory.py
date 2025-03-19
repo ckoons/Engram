@@ -739,6 +739,99 @@ class StructuredMemory:
             logger.error(f"Error finding memory by content: {e}")
             return None
             
+    async def get_memories_by_tag(self, tag: str, max_memories: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get memories with a specific tag.
+        
+        Args:
+            tag: The tag to search for
+            max_memories: Maximum number of memories to return
+            
+        Returns:
+            List of memory dictionaries with the specified tag
+        """
+        try:
+            # Check if tag exists in index
+            if tag not in self.metadata_index.get("tags", {}):
+                logger.info(f"No memories found with tag: {tag}")
+                return []
+                
+            # Get memory IDs with this tag
+            memory_ids = self.metadata_index["tags"][tag][:max_memories]
+            
+            # Load full memory data for each ID
+            results = []
+            for memory_id in memory_ids:
+                memory = await self.get_memory(memory_id)
+                if memory:
+                    results.append(memory)
+                    
+            # Sort by importance and timestamp
+            results.sort(key=lambda x: (-(x.get("importance", 0)), x.get("metadata", {}).get("timestamp", "")))
+            
+            return results
+        except Exception as e:
+            logger.error(f"Error getting memories by tag: {e}")
+            return []
+            
+    async def search_memories_in_category(self, query: str, category: str, max_memories: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for memories containing a query string within a specific category.
+        
+        Args:
+            query: The query string to search for
+            category: The category to search in
+            max_memories: Maximum number of memories to return
+            
+        Returns:
+            List of matching memory dictionaries
+        """
+        try:
+            # Validate category
+            if category not in self.category_importance:
+                logger.warning(f"Invalid category: {category}")
+                return []
+                
+            # Use search_memories with category filter
+            return await self.search_memories(
+                query=query,
+                categories=[category],
+                limit=max_memories,
+                sort_by="relevance"
+            )
+        except Exception as e:
+            logger.error(f"Error searching memories in category: {e}")
+            return []
+            
+    async def get_all_memories(self, max_memories: int = 50, include_private: bool = False) -> List[Dict[str, Any]]:
+        """
+        Get all memories across all categories, sorted by importance.
+        
+        Args:
+            max_memories: Maximum number of memories to return
+            include_private: Whether to include private memories
+            
+        Returns:
+            List of memory dictionaries
+        """
+        try:
+            # Determine which categories to include
+            categories = list(self.category_importance.keys())
+            if not include_private and "private" in categories:
+                categories.remove("private")
+                
+            # Use search_memories without a query to get all memories
+            return await self.search_memories(
+                query=None,  # No query means return all memories
+                categories=categories,
+                min_importance=1,  # Include all importance levels
+                limit=max_memories,
+                sort_by="importance"  # Sort by importance
+            )
+        except Exception as e:
+            logger.error(f"Error getting all memories: {e}")
+            return []
+            
     async def get_context_memories(self, text: str, max_memories: int = 5) -> List[Dict[str, Any]]:
         """
         Get memories relevant to the given context text.
@@ -790,6 +883,80 @@ class StructuredMemory:
             return sorted_results[:max_memories]
         except Exception as e:
             logger.error(f"Error getting context memories: {e}")
+            return []
+            
+    async def get_semantic_memories(self, query: str, max_memories: int = 10) -> List[Dict[str, Any]]:
+        """
+        Get semantically similar memories using vector search if available,
+        falling back to keyword search if vector search is not available.
+        
+        Args:
+            query: The semantic query to search for
+            max_memories: Maximum number of memories to return
+            
+        Returns:
+            List of semantically relevant memory dictionaries
+        """
+        try:
+            # Try to access the memory service to use vector search
+            from engram.core.memory import MemoryService, HAS_VECTOR_DB
+            
+            # Check if vector search is available
+            if HAS_VECTOR_DB:
+                try:
+                    # Initialize memory service with same client ID
+                    memory_service = MemoryService(client_id=self.client_id)
+                    
+                    # Use vector search across all namespaces for semantic search
+                    results = []
+                    namespaces = ["conversations", "thinking", "longterm", "projects", "session"]
+                    
+                    for namespace in namespaces:
+                        # Use the memory service's search function which uses vector search
+                        search_results = await memory_service.search(
+                            query=query,
+                            namespace=namespace,
+                            limit=max_memories // len(namespaces) + 1  # Distribute limit across namespaces
+                        )
+                        
+                        # Format the results to match structured memory format
+                        for result in search_results.get("results", []):
+                            # Create a memory object that matches our format
+                            memory_obj = {
+                                "id": result.get("id", ""),
+                                "content": result.get("content", ""),
+                                "category": namespace,  # Map namespace to category
+                                "importance": 4,  # Default importance for semantic results
+                                "metadata": result.get("metadata", {}),
+                                "tags": ["semantic_search"],
+                                "relevance": result.get("relevance", 0.0)  # Include relevance score
+                            }
+                            results.append(memory_obj)
+                    
+                    # Sort by relevance score
+                    sorted_results = sorted(
+                        results,
+                        key=lambda x: x.get("relevance", 0.0),
+                        reverse=True  # Higher relevance first
+                    )
+                    
+                    # Limit results
+                    return sorted_results[:max_memories]
+                    
+                except Exception as vector_error:
+                    logger.warning(f"Vector search failed, falling back to keyword search: {vector_error}")
+                    # Fall back to keyword search if vector search fails
+            
+            # Fallback to keyword-based search within structured memory
+            logger.info("Using keyword search fallback for semantic query")
+            return await self.search_memories(
+                query=query,
+                limit=max_memories,
+                sort_by="relevance"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting semantic memories: {e}")
             return []
             
     async def migrate_from_memory_service(self, memory_service, limit: int = 1000) -> int:
