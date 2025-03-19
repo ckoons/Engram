@@ -33,12 +33,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger("engram.consolidated")
 
+# Check if we're in fallback mode (set by engram_consolidated script)
+USE_FALLBACK = os.environ.get('ENGRAM_USE_FALLBACK', '').lower() in ('1', 'true', 'yes')
+
 # Import Engram modules
 try:
+    # Always import config first
+    from engram.core.config import get_config
+    
+    # Check for fallback mode
+    if USE_FALLBACK:
+        logger.info("Using fallback implementation without vector database")
+        # Force Python to not try to import vector modules
+        os.environ['ENGRAM_USE_FALLBACK'] = '1'
+        
+    # Now import memory modules
     from engram.core.memory import MemoryService, HAS_MEM0
     from engram.core.structured_memory import StructuredMemory
     from engram.core.nexus import NexusInterface
-    from engram.core.config import get_config
 except ImportError as e:
     logger.error(f"Failed to import Engram modules: {e}")
     logger.error("Make sure you're running this from the project root or it's installed")
@@ -1052,6 +1064,8 @@ def parse_arguments():
                       help="Directory to store memory data")
     parser.add_argument("--config", type=str, default=None,
                       help="Path to custom config file")
+    parser.add_argument("--fallback", action="store_true",
+                      help="Use fallback file-based implementation without vector database")
     parser.add_argument("--no-auto-agency", action="store_true",
                       help="Disable automatic agency activation")
     parser.add_argument("--debug", action="store_true",
@@ -1083,6 +1097,11 @@ def main():
     # Set environment variables
     os.environ["ENGRAM_CLIENT_ID"] = config["client_id"]
     os.environ["ENGRAM_DATA_DIR"] = config["data_dir"]
+    
+    # Set fallback mode if requested
+    if args.fallback:
+        os.environ["ENGRAM_USE_FALLBACK"] = "1"
+        logger.info("Fallback mode enabled: Using file-based implementation without vector database")
     
     # Start the server
     logger.info(f"Starting Engram consolidated server on {config['host']}:{config['port']}")

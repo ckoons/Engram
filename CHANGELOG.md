@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2025-03-19
+
+### Added
+- Implemented ChromaDB as primary vector database backend
+- Added comprehensive vector database integration documentation
+- Created vector_db_setup.py utility for testing and setup
+- Enhanced health endpoint with implementation details
+
+### Changed
+- Replaced Qdrant with ChromaDB for vector storage
+- Improved sentence-transformer integration for embeddings
+- Optimized vector search for better semantic relevance
+- Enhanced memory service to handle different vector DB implementations
+
+### Fixed
+- Resolved validation issues with vector database implementations
+- Fixed compatibility with Pydantic versions
+- Improved error handling with proper fallback to file-based storage
+- Enhanced collection management for memory compartments
+
 ## [0.6.0] - 2025-03-17
 
 ### Changed

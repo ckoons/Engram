@@ -26,28 +26,38 @@ logger = logging.getLogger("engram.memory")
 HAS_VECTOR_DB = False
 VECTOR_DB_NAME = None
 VECTOR_DB_VERSION = None
+HAS_MEM0 = False  # Legacy compatibility
 
-try:
-    # Try to import Qdrant for vector storage
-    import qdrant_client
-    from sentence_transformers import SentenceTransformer
-    
-    HAS_VECTOR_DB = True
-    VECTOR_DB_NAME = "qdrant"
-    
-    # Get version if available
-    try:
-        VECTOR_DB_VERSION = qdrant_client.__version__
-    except AttributeError:
-        # Package doesn't expose version directly
-        VECTOR_DB_VERSION = "unknown"
-    
-    logger.info(f"Vector storage library found: {VECTOR_DB_NAME} {VECTOR_DB_VERSION}")
-    logger.info("Using vector-based memory implementation")
-except ImportError:
+# Check if fallback mode is forced (set by environment variable)
+import os
+USE_FALLBACK = os.environ.get('ENGRAM_USE_FALLBACK', '').lower() in ('1', 'true', 'yes')
+
+if USE_FALLBACK:
+    # Skip vector DB imports entirely
+    logger.info("Fallback mode requested by environment variable")
+    logger.info("Using file-based memory implementation (no vector search)")
     HAS_VECTOR_DB = False
-    logger.warning("Vector storage library not found, using fallback file-based implementation")
-    logger.info("Memory will still work but without vector search capabilities")
+else:
+    # Import ChromaDB for vector-based memory
+    try:
+        import chromadb
+        from sentence_transformers import SentenceTransformer
+        
+        HAS_VECTOR_DB = True
+        VECTOR_DB_NAME = "chromadb"
+        
+        # Get version if available
+        try:
+            VECTOR_DB_VERSION = chromadb.__version__
+        except AttributeError:
+            VECTOR_DB_VERSION = "unknown"
+        
+        logger.info(f"Vector storage library found: {VECTOR_DB_NAME} {VECTOR_DB_VERSION}")
+        logger.info("Using vector-based memory implementation with ChromaDB")
+    except ImportError:
+        HAS_VECTOR_DB = False
+        logger.warning("ChromaDB not found, using fallback file-based implementation")
+        logger.info("Memory will still work but without vector search capabilities")
 
 class MemoryService:
     """
@@ -94,12 +104,9 @@ class MemoryService:
         # Initialize vector DB if available
         if HAS_VECTOR_DB:
             try:
-                # Initialize using Qdrant and sentence transformers
+                # Initialize vector DB path
                 vector_db_path = self.data_dir / "vector_db"
                 vector_db_path.mkdir(parents=True, exist_ok=True)
-                
-                # Create vector database client
-                self.vector_client = qdrant_client.QdrantClient(path=str(vector_db_path))
                 
                 # Load sentence transformer model for embeddings
                 model_name = "all-MiniLM-L6-v2"  # Small, fast model with good performance
@@ -108,42 +115,112 @@ class MemoryService:
                 # Configure vector dimensions based on the model
                 self.vector_dim = self.vector_model.get_sentence_embedding_dimension()
                 
-                # Create collections for each namespace if they don't exist
-                self.namespace_collections = {}
-                for namespace in self.namespaces:
-                    collection_name = f"engram-{client_id}-{namespace}"
+                # Check which vector database we're using
+                if VECTOR_DB_NAME == "chromadb":
+                    # Initialize using ChromaDB
+                    logger.info("Initializing ChromaDB vector database")
+                    self.vector_client = chromadb.PersistentClient(path=str(vector_db_path))
                     
-                    # Check if collection exists, create if it doesn't
-                    collections = self.vector_client.get_collections().collections
-                    collection_names = [c.name for c in collections]
+                    # Create collections for each namespace
+                    self.namespace_collections = {}
                     
-                    if collection_name not in collection_names:
-                        # Create new collection with the right vector size
+                    for namespace in self.namespaces:
+                        collection_name = f"engram-{client_id}-{namespace}"
+                        
+                        # Get or create collection
                         try:
-                            # Try with newer API style
-                            from qdrant_client.http import models
-                            self.vector_client.create_collection(
-                                collection_name=collection_name,
-                                vectors_config=models.VectorParams(
-                                    size=self.vector_dim,
-                                    distance=models.Distance.COSINE
-                                )
+                            collection = self.vector_client.get_or_create_collection(
+                                name=collection_name,
+                                embedding_function=None  # We'll provide embeddings explicitly
                             )
-                        except (ImportError, AttributeError):
-                            # Fall back to simpler API style
-                            self.vector_client.create_collection(
-                                collection_name=collection_name,
-                                vectors_config={
-                                    "size": self.vector_dim,
-                                    "distance": "Cosine"
-                                }
-                            )
+                            logger.info(f"Retrieved or created collection {collection_name}")
+                            self.namespace_collections[namespace] = collection_name
+                        except Exception as e:
+                            logger.error(f"Failed to create ChromaDB collection {collection_name}: {e}")
+                            raise
                     
-                    self.namespace_collections[namespace] = collection_name
-                
-                # Create compartment collections
-                for compartment_id in self.compartments:
-                    self._ensure_compartment_collection(compartment_id)
+                    # Create compartment collections
+                    for compartment_id in self.compartments:
+                        self._ensure_compartment_collection(compartment_id)
+                        
+                elif VECTOR_DB_NAME == "qdrant":
+                    # Initialize using Qdrant
+                    logger.info("Initializing Qdrant vector database")
+                    
+                    # Create vector database client
+                    try:
+                        # For newer client versions
+                        self.vector_client = qdrant_client.QdrantClient(path=str(vector_db_path))
+                    except TypeError:
+                        # For older client versions
+                        self.vector_client = qdrant_client.QdrantClient(location=str(vector_db_path))
+                    
+                    # Patch from_dict to handle the validation error
+                    from_dict_patched = False 
+                    
+                    if hasattr(self.vector_client, '_validate_collection_info'):
+                        # Method exists, create a patched version
+                        try:
+                            # Try to monkey patch the validation method
+                            original_validate = self.vector_client._validate_collection_info
+                            
+                            def patched_validate(*args, **kwargs):
+                                # Skip validation to avoid strict_mode_config issues
+                                return True
+                            
+                            # Apply the patch
+                            self.vector_client._validate_collection_info = patched_validate
+                            from_dict_patched = True
+                            logger.info("Applied patch for collection validation")
+                        except Exception as e:
+                            logger.warning(f"Failed to patch validation method: {e}")
+                    
+                    # Create collections for each namespace
+                    self.namespace_collections = {}
+                    
+                    for namespace in self.namespaces:
+                        collection_name = f"engram-{client_id}-{namespace}"
+                        
+                        # Check if collection exists, create if it doesn't
+                        collections = self.vector_client.get_collections().collections
+                        collection_names = [c.name for c in collections]
+                        
+                        if collection_name not in collection_names:
+                            # Create new collection with the right vector size
+                            try:
+                                # Try with dimension parameter first (works with newer clients)
+                                self.vector_client.create_collection(
+                                    collection_name=collection_name,
+                                    dimension=self.vector_dim
+                                )
+                                logger.info(f"Created collection {collection_name} using dimension parameter")
+                            except Exception as e:
+                                logger.debug(f"First attempt failed: {e}")
+                                try:
+                                    # Try with dictionary config
+                                    self.vector_client.create_collection(
+                                        collection_name=collection_name,
+                                        vectors_config={
+                                            "size": self.vector_dim,
+                                            "distance": "Cosine"
+                                        }
+                                    )
+                                    logger.info(f"Created collection {collection_name} using dictionary config")
+                                except Exception as e2:
+                                    logger.error(f"Failed to create collection {collection_name}: {e2}")
+                                    raise
+                        
+                        self.namespace_collections[namespace] = collection_name
+                    
+                    # Create compartment collections 
+                    for compartment_id in self.compartments:
+                        self._ensure_compartment_collection(compartment_id)
+                        
+                    # Restore original validation if patched
+                    if from_dict_patched:
+                        self.vector_client._validate_collection_info = original_validate
+                else:
+                    raise ValueError(f"Unknown vector database: {VECTOR_DB_NAME}")
                 
                 self.vector_available = True
                 logger.info(f"Initialized vector database for client {client_id}")
@@ -256,41 +333,71 @@ class MemoryService:
                 # Generate embedding for the content
                 embedding = self.vector_model.encode(content_str)
                 
-                # Create the point to add to the vector database
-                try:
-                    # Try with the newer API style
-                    from qdrant_client.http import models
-                    self.vector_client.upsert(
-                        collection_name=collection_name,
-                        points=[
-                            models.PointStruct(
-                                id=hash(memory_id) % (2**63-1),  # Ensure it's a valid ID
-                                vector=embedding.tolist(),
-                                payload={
+                # Handle different vector DBs
+                if VECTOR_DB_NAME == "chromadb":
+                    # ChromaDB implementation
+                    try:
+                        # Get the collection
+                        collection = self.vector_client.get_collection(name=collection_name)
+                        
+                        # Add the document with its embedding
+                        collection.add(
+                            ids=[memory_id],
+                            embeddings=[embedding.tolist()],
+                            documents=[content_str],
+                            metadatas=[{
+                                "id": memory_id,
+                                "timestamp": metadata.get("timestamp", ""),
+                                "client_id": metadata.get("client_id", ""),
+                                "namespace": namespace
+                            }]
+                        )
+                        
+                        logger.debug(f"Added memory to ChromaDB in namespace {namespace} with ID {memory_id}")
+                        return True
+                    except Exception as e:
+                        logger.error(f"Error adding memory to ChromaDB: {e}")
+                        # Fall back to local storage
+                        
+                elif VECTOR_DB_NAME == "qdrant":
+                    # Qdrant implementation
+                    try:
+                        # Try with the newer API style
+                        from qdrant_client.http import models
+                        self.vector_client.upsert(
+                            collection_name=collection_name,
+                            points=[
+                                models.PointStruct(
+                                    id=hash(memory_id) % (2**63-1),  # Ensure it's a valid ID
+                                    vector=embedding.tolist(),
+                                    payload={
+                                        "id": memory_id,
+                                        "content": content_str,
+                                        "metadata": metadata
+                                    }
+                                )
+                            ]
+                        )
+                    except (ImportError, AttributeError):
+                        # Fall back to simpler API style
+                        self.vector_client.upsert(
+                            collection_name=collection_name,
+                            points=[{
+                                "id": hash(memory_id) % (2**63-1),
+                                "vector": embedding.tolist(),
+                                "payload": {
                                     "id": memory_id,
                                     "content": content_str,
                                     "metadata": metadata
                                 }
-                            )
-                        ]
-                    )
-                except (ImportError, AttributeError):
-                    # Fall back to simpler API style
-                    self.vector_client.upsert(
-                        collection_name=collection_name,
-                        points=[{
-                            "id": hash(memory_id) % (2**63-1),
-                            "vector": embedding.tolist(),
-                            "payload": {
-                                "id": memory_id,
-                                "content": content_str,
-                                "metadata": metadata
-                            }
-                        }]
-                    )
-                
-                logger.debug(f"Added memory to vector DB in namespace {namespace} with ID {memory_id}")
-                return True
+                            }]
+                        )
+                    
+                    logger.debug(f"Added memory to Qdrant in namespace {namespace} with ID {memory_id}")
+                    return True
+                else:
+                    raise ValueError(f"Unknown vector database: {VECTOR_DB_NAME}")
+                    
             except Exception as e:
                 logger.error(f"Error adding memory to vector database: {e}")
                 # Fall back to local storage
@@ -381,50 +488,105 @@ class MemoryService:
                 # Generate embedding for the query
                 query_embedding = self.vector_model.encode(query)
                 
-                # Search the vector database
-                try:
-                    # Try with standard API
-                    search_results = self.vector_client.search(
-                        collection_name=collection_name,
-                        query_vector=query_embedding.tolist(),
-                        limit=limit * 2  # Request more results to account for filtering
-                    )
-                except TypeError:
-                    # Fall back to alternate API
-                    search_results = self.vector_client.search(
-                        collection_name=collection_name,
-                        vector=query_embedding.tolist(),
-                        limit=limit * 2
-                    )
-                
-                # Format the results
-                formatted_results = []
-                for result in search_results:
+                # Handle different vector DB implementations
+                if VECTOR_DB_NAME == "chromadb":
+                    # ChromaDB implementation
                     try:
-                        # Handle different result formats
-                        if hasattr(result, 'payload'):
-                            # Standard object format
-                            payload = result.payload
-                            score = getattr(result, 'score', 1.0)
-                        elif isinstance(result, dict):
-                            # Dictionary format
-                            payload = result.get('payload', {})
-                            score = result.get('score', 1.0)
-                        else:
-                            # Unknown format, try to adapt
-                            payload = getattr(result, 'payload', {})
-                            if not payload and hasattr(result, '__dict__'):
-                                payload = result.__dict__
-                            score = 1.0
-                                
-                        formatted_results.append({
-                            "id": payload.get("id", ""),
-                            "content": payload.get("content", ""),
-                            "metadata": payload.get("metadata", {}),
-                            "relevance": score
-                        })
+                        # Get the collection
+                        collection = self.vector_client.get_collection(name=collection_name)
+                        
+                        # Search using the embedding
+                        search_results = collection.query(
+                            query_embeddings=[query_embedding.tolist()],
+                            n_results=limit * 2  # Request more results to account for filtering
+                        )
+                        
+                        # Format the results
+                        formatted_results = []
+                        
+                        # ChromaDB returns results in a dictionary with lists
+                        ids = search_results.get('ids', [[]])[0]
+                        documents = search_results.get('documents', [[]])[0]
+                        metadatas = search_results.get('metadatas', [[]])[0]
+                        distances = search_results.get('distances', [[]])[0]
+                        
+                        for i in range(len(ids)):
+                            # Convert distances to relevance scores (lower distance = higher relevance)
+                            # Normalize to 0-1 range where 1 is highest relevance
+                            distance = distances[i] if i < len(distances) else 1.0
+                            relevance = 1.0 - min(distance, 1.0)  # Cap at 1.0
+                            
+                            metadata = metadatas[i] if i < len(metadatas) else {}
+                            document = documents[i] if i < len(documents) else ""
+                            
+                            formatted_results.append({
+                                "id": ids[i] if i < len(ids) else "",
+                                "content": document,
+                                "metadata": {
+                                    "timestamp": metadata.get("timestamp", ""),
+                                    "client_id": metadata.get("client_id", ""),
+                                    "namespace": metadata.get("namespace", namespace)
+                                },
+                                "relevance": relevance
+                            })
                     except Exception as e:
-                        logger.warning(f"Error formatting result: {e}, skipping")
+                        logger.error(f"Error searching ChromaDB: {e}")
+                        # Fall back to local search
+                        raise
+                
+                elif VECTOR_DB_NAME == "qdrant":
+                    # Qdrant implementation 
+                    try:
+                        # Search the vector database
+                        try:
+                            # Try with standard API
+                            search_results = self.vector_client.search(
+                                collection_name=collection_name,
+                                query_vector=query_embedding.tolist(),
+                                limit=limit * 2  # Request more results to account for filtering
+                            )
+                        except TypeError:
+                            # Fall back to alternate API
+                            search_results = self.vector_client.search(
+                                collection_name=collection_name,
+                                vector=query_embedding.tolist(),
+                                limit=limit * 2
+                            )
+                        
+                        # Format the results
+                        formatted_results = []
+                        for result in search_results:
+                            try:
+                                # Handle different result formats
+                                if hasattr(result, 'payload'):
+                                    # Standard object format
+                                    payload = result.payload
+                                    score = getattr(result, 'score', 1.0)
+                                elif isinstance(result, dict):
+                                    # Dictionary format
+                                    payload = result.get('payload', {})
+                                    score = result.get('score', 1.0)
+                                else:
+                                    # Unknown format, try to adapt
+                                    payload = getattr(result, 'payload', {})
+                                    if not payload and hasattr(result, '__dict__'):
+                                        payload = result.__dict__
+                                    score = 1.0
+                                        
+                                formatted_results.append({
+                                    "id": payload.get("id", ""),
+                                    "content": payload.get("content", ""),
+                                    "metadata": payload.get("metadata", {}),
+                                    "relevance": score
+                                })
+                            except Exception as e:
+                                logger.warning(f"Error formatting Qdrant result: {e}, skipping")
+                    except Exception as e:
+                        logger.error(f"Error searching Qdrant: {e}")
+                        # Fall back to local search
+                        raise
+                else:
+                    raise ValueError(f"Unknown vector database: {VECTOR_DB_NAME}")
                 
                 # Filter out forgotten items
                 if forgotten_items:
@@ -617,20 +779,31 @@ class MemoryService:
             logger.warning(f"Invalid namespace: {namespace}")
             return False
         
-        # Clear mem0 if available
-        if self.mem0_available:
+        # Clear vector database if available
+        if self.vector_available:
             try:
-                if hasattr(self, 'namespace_memories'):
-                    # Using Memory API (current mem0 version)
-                    memory = self.namespace_memories.get(namespace)
-                    if memory:
-                        # Clear the memory
-                        memory.reset()
-                        logger.info(f"Cleared namespace {namespace} in mem0 Memory")
-                        return True
+                # Get the appropriate collection
+                collection_name = self.namespace_collections.get(namespace)
+                if collection_name:
+                    # Try to delete all points in the collection
+                    try:
+                        # Try with newer API style first
+                        from qdrant_client.http import models
+                        self.vector_client.delete(
+                            collection_name=collection_name,
+                            points_selector=models.Filter()  # Empty filter to match all points
+                        )
+                    except (ImportError, AttributeError):
+                        # Fall back to simpler API style
+                        self.vector_client.delete(
+                            collection_name=collection_name,
+                            points_selector={}  # Empty filter to match all points
+                        )
+                    logger.info(f"Cleared namespace {namespace} in vector storage")
+                    return True
             except Exception as e:
-                logger.error(f"Error clearing namespace in mem0: {e}")
-                return False
+                logger.error(f"Error clearing namespace in vector storage: {e}")
+                # Fall back to basic storage
         
         # Clear fallback memory
         try:
@@ -682,23 +855,79 @@ class MemoryService:
             namespace = f"compartment-{compartment_id}"
             collection_name = f"engram-{self.client_id}-{namespace}"
             
-            # Check if the collection already exists
-            collections = self.vector_client.get_collections().collections
-            collection_names = [c.name for c in collections]
-            
-            if collection_name in collection_names:
-                # Collection already exists
-                self.namespace_collections[namespace] = collection_name
-                return True
-            
-            # Create a new collection with the right vector size
-            self.vector_client.create_collection(
-                collection_name=collection_name,
-                vectors_config=qdrant_client.models.VectorParams(
-                    size=self.vector_dim,
-                    distance=qdrant_client.models.Distance.COSINE
-                )
-            )
+            # Handle different vector DBs differently
+            if VECTOR_DB_NAME == "chromadb":
+                # ChromaDB implementation - simply get or create collection
+                try:
+                    collection = self.vector_client.get_or_create_collection(
+                        name=collection_name,
+                        embedding_function=None  # We'll provide embeddings explicitly
+                    )
+                    logger.info(f"Retrieved or created compartment collection {collection_name}")
+                    self.namespace_collections[namespace] = collection_name
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to create ChromaDB compartment collection {collection_name}: {e}")
+                    raise
+                    
+            elif VECTOR_DB_NAME == "qdrant":
+                # Qdrant implementation
+                # Check if the collection already exists
+                collections = self.vector_client.get_collections().collections
+                collection_names = [c.name for c in collections]
+                
+                if collection_name in collection_names:
+                    # Collection already exists
+                    self.namespace_collections[namespace] = collection_name
+                    return True
+                    
+                # Patch validation method to handle strict_mode_config issue
+                from_dict_patched = False
+                
+                if hasattr(self.vector_client, '_validate_collection_info'):
+                    # Method exists, create a patched version
+                    try:
+                        # Try to monkey patch the validation method
+                        original_validate = self.vector_client._validate_collection_info
+                        
+                        def patched_validate(*args, **kwargs):
+                            # Skip validation to avoid strict_mode_config issues
+                            return True
+                        
+                        # Apply the patch
+                        self.vector_client._validate_collection_info = patched_validate
+                        from_dict_patched = True
+                    except Exception as e:
+                        logger.warning(f"Failed to patch validation method for compartment: {e}")
+                
+                try:
+                    # Try with dimension parameter first (works with newer clients)
+                    self.vector_client.create_collection(
+                        collection_name=collection_name,
+                        dimension=self.vector_dim
+                    )
+                    logger.info(f"Created compartment collection {collection_name} using dimension parameter")
+                except Exception as e:
+                    logger.debug(f"First compartment creation attempt failed: {e}")
+                    try:
+                        # Try with dictionary config
+                        self.vector_client.create_collection(
+                            collection_name=collection_name,
+                            vectors_config={
+                                "size": self.vector_dim,
+                                "distance": "Cosine"
+                            }
+                        )
+                        logger.info(f"Created compartment collection {collection_name} using dictionary config")
+                    except Exception as e2:
+                        logger.error(f"Failed to create compartment collection {collection_name}: {e2}")
+                        raise
+                        
+                # Restore original validation if patched
+                if from_dict_patched:
+                    self.vector_client._validate_collection_info = original_validate
+            else:
+                raise ValueError(f"Unknown vector database: {VECTOR_DB_NAME}")
             
             # Store the collection name for future use
             self.namespace_collections[namespace] = collection_name
@@ -937,7 +1166,7 @@ class MemoryService:
                         memory["metadata"]["expiration"] = expiration_date.isoformat()
                         
                         # Save to file if using fallback storage
-                        if not self.mem0_available:
+                        if not self.vector_available:
                             with open(self.fallback_file, "w") as f:
                                 json.dump(self.fallback_memories, f, indent=2)
                         
