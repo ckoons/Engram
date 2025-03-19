@@ -124,6 +124,7 @@ def check_services() -> Dict[str, Any]:
         },
         "memory_connected": False,
         "mem0_available": False,
+        "vector_available": False,
     }
     
     # Check consolidated server
@@ -157,6 +158,7 @@ def check_services() -> Dict[str, Any]:
                 health_data = response.json()
                 result["memory_connected"] = health_data.get("status") == "ok"
                 result["mem0_available"] = health_data.get("mem0_available", False)
+                result["vector_available"] = health_data.get("vector_available", False)
         except Exception:
             pass
     
@@ -365,16 +367,20 @@ def display_status_report(services_status: Dict[str, Any],
     print(f"  Memory Server: {memory_status} (PID: {services_status['memory_server']['pid']})")
     print(f"  HTTP Wrapper: {http_status} (PID: {services_status['http_wrapper']['pid']})")
     print(f"  Memory Connection: {'✅ Connected' if services_status['memory_connected'] else '❌ Not Connected'}")
-    print(f"  mem0ai Integration: {mem0_status}")
+    vector_status = "✅ Available" if services_status["vector_available"] else "❌ Not Available" 
+    print(f"  Vector DB Integration: {vector_status}")
     
-    # Try to get mem0ai version if available
+    # Try to get vector DB version if available
     try:
-        import mem0ai
-        print(f"  mem0ai Version: {GREEN}{mem0ai.__version__}{RESET}")
+        from engram.core.memory import VECTOR_DB_NAME, VECTOR_DB_VERSION
+        if VECTOR_DB_NAME and VECTOR_DB_VERSION:
+            print(f"  Vector DB: {GREEN}{VECTOR_DB_NAME} {VECTOR_DB_VERSION}{RESET}")
+        else:
+            print(f"  Vector DB: {RED}Not available{RESET}")
     except ImportError:
-        print(f"  mem0ai Version: {RED}Not installed{RESET}")
+        print(f"  Vector DB: {RED}Not installed{RESET}")
     except Exception as e:
-        print(f"  mem0ai Version: {YELLOW}Error checking version: {e}{RESET}")
+        print(f"  Vector DB: {YELLOW}Error checking version: {e}{RESET}")
     
     # Version Information
     if version_info:

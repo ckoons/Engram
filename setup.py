@@ -22,9 +22,9 @@ requirements = [
     "pydantic>=2.4.2",
 ]
 
-# Optional requirements (mem0ai provides vector-based memory capabilities)
+# Optional requirements (vector database for memory capabilities)
 extras_require = {
-    "vector": ["mem0ai==0.1.67"],
+    "vector": ["qdrant-client>=1.7.0", "sentence-transformers>=2.2.2"],
 }
 
 setup(

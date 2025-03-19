@@ -64,13 +64,15 @@ class MemoryMultiQuery(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     client_id: str
-    mem0_available: bool
+    mem0_available: bool  # For backward compatibility
+    vector_available: bool = False
     namespaces: List[str]
     structured_memory_available: bool
     nexus_available: bool
     implementation_type: str = "unknown"
     vector_search: bool = False
     vector_db_version: Optional[str] = None
+    vector_db_name: Optional[str] = None
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -146,27 +148,22 @@ async def health_check():
     
     try:
         # Determine memory implementation type
-        mem0_available = False
-        mem0_version = None
+        vector_available = False
+        vector_db_version = None
+        vector_db_name = None
         implementation_type = "file"
         
-        if hasattr(memory_service, "mem0_available"):
-            mem0_available = memory_service.mem0_available
+        if hasattr(memory_service, "vector_available"):
+            vector_available = memory_service.vector_available
             
-            # Try to get vector db version if available
-            if mem0_available:
+            # Get vector database info if available
+            if vector_available:
                 implementation_type = "vector"
+                # Try to get vector db information
                 try:
-                    # Try both import paths
-                    try:
-                        import mem0ai
-                        mem0_version = mem0ai.__version__
-                    except ImportError:
-                        try:
-                            import mem0
-                            mem0_version = mem0.__version__
-                        except ImportError:
-                            pass
+                    from engram.core.memory import VECTOR_DB_NAME, VECTOR_DB_VERSION
+                    vector_db_name = VECTOR_DB_NAME
+                    vector_db_version = VECTOR_DB_VERSION
                 except Exception:
                     pass
         
@@ -177,17 +174,19 @@ async def health_check():
         response_data = {
             "status": "ok",
             "client_id": client_id,
-            "mem0_available": mem0_available,
+            "mem0_available": False,  # For backward compatibility
+            "vector_available": vector_available,
             "implementation_type": implementation_type,
-            "vector_search": mem0_available,
+            "vector_search": vector_available,
+            "vector_db_name": vector_db_name,
             "namespaces": namespaces,
             "structured_memory_available": structured_memory is not None,
             "nexus_available": nexus is not None
         }
         
         # Include version info if available
-        if mem0_version:
-            response_data["vector_db_version"] = mem0_version
+        if vector_db_version:
+            response_data["vector_db_version"] = vector_db_version
         
         return HealthResponse(**response_data)
     except Exception as e:
@@ -200,6 +199,7 @@ async def health_check():
             status="degraded",
             client_id=client_id,
             mem0_available=False,
+            vector_available=False,
             implementation_type="fallback",
             namespaces=[],
             structured_memory_available=structured_memory is not None,

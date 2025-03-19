@@ -21,28 +21,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger("engram.memory")
 
-# Try to import mem0ai for vector storage (optional dependency)
-# Note: This is designed to work without mem0ai, falling back to file-based storage
+# Try to import vector database components (optional dependencies)
+# Note: This is designed to work without vector DB dependencies, falling back to file-based storage
+HAS_VECTOR_DB = False
+VECTOR_DB_NAME = None
+VECTOR_DB_VERSION = None
+
 try:
-    # First try direct import
-    import mem0ai
-    HAS_MEM0 = True
-    logger.info("mem0ai library found, using vector-based memory")
-    logger.info(f"Using mem0ai version: {mem0ai.__version__}")
+    # Try to import Qdrant for vector storage
+    import qdrant_client
+    from sentence_transformers import SentenceTransformer
     
-    # Alias for compatibility with existing code
-    mem0 = mem0ai
+    HAS_VECTOR_DB = True
+    VECTOR_DB_NAME = "qdrant"
+    VECTOR_DB_VERSION = qdrant_client.__version__
+    
+    logger.info(f"Vector storage library found: {VECTOR_DB_NAME} {VECTOR_DB_VERSION}")
+    logger.info("Using vector-based memory implementation")
 except ImportError:
-    # Also try alternative import in case it's installed as mem0
-    try:
-        import mem0
-        HAS_MEM0 = True
-        logger.info("mem0 library found, using vector-based memory")
-        logger.info(f"Using mem0 version: {mem0.__version__}")
-    except ImportError:
-        HAS_MEM0 = False
-        logger.warning("Vector storage library not found, using fallback file-based implementation")
-        logger.info("Memory will still work but without vector search capabilities")
+    HAS_VECTOR_DB = False
+    logger.warning("Vector storage library not found, using fallback file-based implementation")
+    logger.info("Memory will still work but without vector search capabilities")
 
 class MemoryService:
     """
@@ -76,64 +75,67 @@ class MemoryService:
         
         # Initialize memory storage
         self.fallback_memories = {}
-        self.mem0_client = None
-        self.mem0_available = False
+        self.vector_client = None
+        self.vector_model = None
+        self.vector_available = False
+        self.namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
         
         # Store active compartments
         self.active_compartments = []
         self.compartment_file = self.data_dir / f"{client_id}-compartments.json"
         self.compartments = self._load_compartments()
         
-        # Initialize mem0 if available
-        if HAS_MEM0:
+        # Initialize vector DB if available
+        if HAS_VECTOR_DB:
             try:
-                # Initialize using the current mem0 API (MemoryClient)
-                self.namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
+                # Initialize using Qdrant and sentence transformers
+                vector_db_path = self.data_dir / "vector_db"
+                vector_db_path.mkdir(parents=True, exist_ok=True)
                 
-                # Set up environment for local storage (if no API key present)
-                os.environ["MEM0_API_KEY"] = os.environ.get("MEM0_API_KEY", "local")
+                # Create vector database client
+                self.vector_client = qdrant_client.QdrantClient(path=str(vector_db_path))
                 
-                # Create memory client
-                self.mem0_client = mem0.MemoryClient()
+                # Load sentence transformer model for embeddings
+                model_name = "all-MiniLM-L6-v2"  # Small, fast model with good performance
+                self.vector_model = SentenceTransformer(model_name)
                 
-                # Create memories for each namespace
-                self.namespace_memories = {}
+                # Configure vector dimensions based on the model
+                self.vector_dim = self.vector_model.get_sentence_embedding_dimension()
+                
+                # Create collections for each namespace if they don't exist
+                self.namespace_collections = {}
                 for namespace in self.namespaces:
-                    memory_name = f"engram-{client_id}-{namespace}"
+                    collection_name = f"engram-{client_id}-{namespace}"
                     
-                    # Create Memory object with collection name
-                    from mem0ai.configs.base import MemoryConfig
-                    from mem0ai.configs.vector_store import VectorStoreConfig, QdrantConfig
+                    # Check if collection exists, create if it doesn't
+                    collections = self.vector_client.get_collections().collections
+                    collection_names = [c.name for c in collections]
                     
-                    # Configure vector store with the namespace as collection name
-                    vector_config = VectorStoreConfig(
-                        provider="qdrant",
-                        config=QdrantConfig(
-                            collection_name=memory_name,
-                            path=str(self.data_dir / "mem0")
+                    if collection_name not in collection_names:
+                        # Create new collection with the right vector size
+                        self.vector_client.create_collection(
+                            collection_name=collection_name,
+                            vectors_config=qdrant_client.models.VectorParams(
+                                size=self.vector_dim,
+                                distance=qdrant_client.models.Distance.COSINE
+                            )
                         )
-                    )
                     
-                    # Create memory config
-                    memory_config = MemoryConfig(
-                        vector_store=vector_config
-                    )
-                    
-                    # Create memory for this namespace
-                    self.namespace_memories[namespace] = mem0.Memory(config=memory_config)
+                    self.namespace_collections[namespace] = collection_name
                 
-                # Create compartment memories
+                # Create compartment collections
                 for compartment_id in self.compartments:
-                    self._ensure_compartment_memory(compartment_id)
+                    self._ensure_compartment_collection(compartment_id)
                 
-                self.mem0_available = True
-                logger.info(f"Initialized mem0ai MemoryClient for client {client_id}")
+                self.vector_available = True
+                logger.info(f"Initialized vector database for client {client_id}")
+                logger.info(f"Using model {model_name} with dimension {self.vector_dim}")
             except Exception as e:
-                logger.error(f"Error initializing mem0ai: {e}")
-                self.mem0_available = False
+                logger.error(f"Error initializing vector database: {e}")
+                self.vector_available = False
         
         # Initialize fallback storage
-        if not self.mem0_available:
+        if not self.vector_available:
             logger.info(f"Using fallback file-based memory implementation for client {client_id}")
             logger.info(f"All memory features will work but without vector search capabilities")
             self.fallback_file = self.data_dir / f"{client_id}-memories.json"
@@ -148,7 +150,7 @@ class MemoryService:
                     self.fallback_memories = {}
             
             # Initialize with empty namespaces if needed
-            for namespace in ["conversations", "thinking", "longterm", "projects", "compartments", "session"]:
+            for namespace in self.namespaces:
                 if namespace not in self.fallback_memories:
                     self.fallback_memories[namespace] = []
                     
@@ -174,14 +176,20 @@ class MemoryService:
             Boolean indicating success
         """
         # Check if namespace is a valid base namespace or a compartment
-        valid_namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
+        valid_namespaces = self.namespaces
         
         # Support compartment namespaces 
         if namespace.startswith("compartment-"):
             compartment_id = namespace[len("compartment-"):]
             if compartment_id in self.compartments:
                 # Valid compartment
-                self._ensure_compartment_memory(compartment_id)
+                if self.vector_available:
+                    self._ensure_compartment_collection(compartment_id)
+                else:
+                    # Fallback file-based storage
+                    compartment_ns = f"compartment-{compartment_id}"
+                    if compartment_ns not in self.fallback_memories:
+                        self.fallback_memories[compartment_ns] = []
             else:
                 logger.warning(f"Invalid compartment: {compartment_id}, using 'conversations'")
                 namespace = "conversations"
@@ -212,33 +220,50 @@ class MemoryService:
         else:
             content_str = content
         
-        # Store in mem0 if available
-        if self.mem0_available:
+        # Generate a unique memory ID
+        memory_id = f"{namespace}-{int(time.time())}-{hash(content_str) % 10000}"
+        
+        # Store in vector database if available
+        if self.vector_available:
             try:
-                memory_id = f"{namespace}-{int(time.time())}"
+                # Get the appropriate collection
+                collection_name = self.namespace_collections.get(namespace)
+                if not collection_name and namespace.startswith("compartment-"):
+                    compartment_id = namespace[len("compartment-"):]
+                    collection_name = f"engram-{self.client_id}-compartment-{compartment_id}"
                 
-                if hasattr(self, 'namespace_memories'):
-                    # Using Memory API (current mem0 version)
-                    memory = self.namespace_memories.get(namespace)
-                    if memory:
-                        # Add to memory
-                        memory.add(
-                            messages=content_str,
-                            metadata=metadata
+                if not collection_name:
+                    raise ValueError(f"No collection found for namespace: {namespace}")
+                
+                # Generate embedding for the content
+                embedding = self.vector_model.encode(content_str)
+                
+                # Create the point to add to the vector database
+                self.vector_client.upsert(
+                    collection_name=collection_name,
+                    points=[
+                        qdrant_client.models.PointStruct(
+                            id=str(hash(memory_id)),  # Hash the ID to get a numeric ID
+                            vector=embedding.tolist(),
+                            payload={
+                                "id": memory_id,
+                                "content": content_str,
+                                "metadata": metadata
+                            }
                         )
-                        logger.debug(f"Added memory to {namespace} using Memory API")
-                        return True
+                    ]
+                )
                 
-                logger.debug(f"Added memory to {namespace} with ID {memory_id}")
+                logger.debug(f"Added memory to vector DB in namespace {namespace} with ID {memory_id}")
                 return True
             except Exception as e:
-                logger.error(f"Error adding memory to mem0: {e}")
+                logger.error(f"Error adding memory to vector database: {e}")
                 # Fall back to local storage
         
         # Store in fallback memory
         try:
             memory_obj = {
-                "id": f"{namespace}-{int(time.time())}",
+                "id": memory_id,
                 "content": content_str,
                 "metadata": metadata
             }
@@ -273,7 +298,7 @@ class MemoryService:
             Dictionary with search results
         """
         # Check if namespace is a valid base namespace or a compartment
-        valid_namespaces = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
+        valid_namespaces = self.namespaces
         
         # Support compartment namespaces
         if namespace.startswith("compartment-"):
@@ -285,46 +310,59 @@ class MemoryService:
             logger.warning(f"Invalid namespace: {namespace}, using 'conversations'")
             namespace = "conversations"
         
-        # Search mem0 if available
-        if self.mem0_available:
+        # Get forgotten items if needed
+        forgotten_items = []
+        if check_forget and namespace != "longterm":
             try:
+                # Search for FORGET instructions
+                forget_results = await self.search(
+                    query="FORGET/IGNORE",
+                    namespace="longterm",
+                    limit=100,
+                    check_forget=False  # Prevent recursion
+                )
+                
+                # Extract the forgotten items
+                for item in forget_results.get("results", []):
+                    content = item.get("content", "")
+                    if content.startswith("FORGET/IGNORE: "):
+                        forgotten_text = content[len("FORGET/IGNORE: "):]
+                        forgotten_items.append(forgotten_text)
+            except Exception as e:
+                logger.error(f"Error checking for forgotten items: {e}")
+        
+        # Search vector database if available
+        if self.vector_available:
+            try:
+                # Get the appropriate collection
+                collection_name = self.namespace_collections.get(namespace)
+                if not collection_name and namespace.startswith("compartment-"):
+                    compartment_id = namespace[len("compartment-"):]
+                    collection_name = f"engram-{self.client_id}-compartment-{compartment_id}"
+                
+                if not collection_name:
+                    raise ValueError(f"No collection found for namespace: {namespace}")
+                
+                # Generate embedding for the query
+                query_embedding = self.vector_model.encode(query)
+                
+                # Search the vector database
+                search_results = self.vector_client.search(
+                    collection_name=collection_name,
+                    query_vector=query_embedding.tolist(),
+                    limit=limit * 2  # Request more results to account for filtering
+                )
+                
+                # Format the results
                 formatted_results = []
-                
-                if hasattr(self, 'namespace_memories'):
-                    # Using Memory API (current mem0 version)
-                    memory = self.namespace_memories.get(namespace)
-                    if memory:
-                        # Search memory
-                        results = memory.search(query=query, limit=limit)
-                        
-                        # Format the results
-                        for result in results:
-                            formatted_results.append({
-                                "content": result.get("text", "") if isinstance(result, dict) else result,
-                                "metadata": result.get("metadata", {}) if isinstance(result, dict) else {},
-                                "relevance": result.get("score", 1.0) if isinstance(result, dict) else 1.0
-                            })
-                
-                # If check_forget is enabled, get forget instructions from longterm memory
-                forgotten_items = []
-                if check_forget and namespace != "longterm":
-                    try:
-                        # Search for FORGET instructions
-                        forget_results = await self.search(
-                            query="FORGET/IGNORE",
-                            namespace="longterm",
-                            limit=100,
-                            check_forget=False  # Prevent recursion
-                        )
-                        
-                        # Extract the forgotten items
-                        for item in forget_results.get("results", []):
-                            content = item.get("content", "")
-                            if content.startswith("FORGET/IGNORE: "):
-                                forgotten_text = content[len("FORGET/IGNORE: "):]
-                                forgotten_items.append(forgotten_text)
-                    except Exception as e:
-                        logger.error(f"Error checking for forgotten items: {e}")
+                for result in search_results:
+                    payload = result.payload
+                    formatted_results.append({
+                        "id": payload.get("id", ""),
+                        "content": payload.get("content", ""),
+                        "metadata": payload.get("metadata", {}),
+                        "relevance": result.score
+                    })
                 
                 # Filter out forgotten items
                 if forgotten_items:
@@ -346,6 +384,9 @@ class MemoryService:
                     
                     formatted_results = filtered_results
                 
+                # Limit the results
+                formatted_results = formatted_results[:limit]
+                
                 return {
                     "results": formatted_results,
                     "count": len(formatted_results),
@@ -353,7 +394,7 @@ class MemoryService:
                     "forgotten_count": len(forgotten_items) if forgotten_items else 0
                 }
             except Exception as e:
-                logger.error(f"Error searching mem0: {e}")
+                logger.error(f"Error searching vector database: {e}")
                 # Fall back to local search
         
         # Search fallback memory
@@ -365,6 +406,7 @@ class MemoryService:
                 content = memory.get("content", "")
                 if query.lower() in content.lower():
                     results.append({
+                        "id": memory.get("id", ""),
                         "content": content,
                         "metadata": memory.get("metadata", {}),
                         "relevance": 1.0  # No real relevance score in fallback
@@ -376,19 +418,6 @@ class MemoryService:
                 reverse=True
             )
             results = results[:limit]
-            
-            # If check_forget is enabled, filter out forgotten items from fallback too
-            forgotten_items = []
-            if check_forget and namespace != "longterm":
-                try:
-                    # Look for FORGET instructions in longterm namespace
-                    for memory in self.fallback_memories.get("longterm", []):
-                        content = memory.get("content", "")
-                        if content.startswith("FORGET/IGNORE: "):
-                            forgotten_text = content[len("FORGET/IGNORE: "):]
-                            forgotten_items.append(forgotten_text)
-                except Exception as e:
-                    logger.error(f"Error checking for forgotten items in fallback: {e}")
             
             # Filter results if needed
             if forgotten_items:
@@ -577,49 +606,44 @@ class MemoryService:
             logger.error(f"Error saving compartments: {e}")
             return False
             
-    def _ensure_compartment_memory(self, compartment_id: str) -> bool:
-        """Ensure memory storage exists for the given compartment."""
-        if not self.mem0_available:
+    def _ensure_compartment_collection(self, compartment_id: str) -> bool:
+        """Ensure vector collection exists for the given compartment."""
+        if not self.vector_available:
             # For fallback storage, just initialize an empty list if needed
             namespace = f"compartment-{compartment_id}"
             if namespace not in self.fallback_memories:
                 self.fallback_memories[namespace] = []
             return True
             
-        # For mem0 storage, create a memory object for the compartment
+        # For vector storage, create a collection for the compartment
         try:
-            if not hasattr(self, 'namespace_memories'):
-                return False
-                
             namespace = f"compartment-{compartment_id}"
-            if namespace in self.namespace_memories:
+            collection_name = f"engram-{self.client_id}-{namespace}"
+            
+            # Check if the collection already exists
+            collections = self.vector_client.get_collections().collections
+            collection_names = [c.name for c in collections]
+            
+            if collection_name in collection_names:
+                # Collection already exists
+                self.namespace_collections[namespace] = collection_name
                 return True
-                
-            # Create Memory object with collection name
-            memory_name = f"engram-{self.client_id}-{namespace}"
             
-            from mem0ai.configs.base import MemoryConfig
-            from mem0ai.configs.vector_store import VectorStoreConfig, QdrantConfig
-            
-            # Configure vector store with the namespace as collection name
-            vector_config = VectorStoreConfig(
-                provider="qdrant",
-                config=QdrantConfig(
-                    collection_name=memory_name,
-                    path=str(self.data_dir / "mem0")
+            # Create a new collection with the right vector size
+            self.vector_client.create_collection(
+                collection_name=collection_name,
+                vectors_config=qdrant_client.models.VectorParams(
+                    size=self.vector_dim,
+                    distance=qdrant_client.models.Distance.COSINE
                 )
             )
             
-            # Create memory config
-            memory_config = MemoryConfig(
-                vector_store=vector_config
-            )
+            # Store the collection name for future use
+            self.namespace_collections[namespace] = collection_name
             
-            # Create memory for this namespace
-            self.namespace_memories[namespace] = mem0.Memory(config=memory_config)
             return True
         except Exception as e:
-            logger.error(f"Error creating mem0ai memory for compartment {compartment_id}: {e}")
+            logger.error(f"Error creating vector collection for compartment {compartment_id}: {e}")
             return False
     
     async def create_compartment(self, name: str, description: str = None, parent: str = None) -> Optional[str]:

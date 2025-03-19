@@ -3,7 +3,8 @@ uvicorn>=0.23.2
 requests>=2.31.0
 python-dotenv>=1.0.0
 pydantic>=2.4.2
-mem0ai==0.1.67; python_version >= "3.9"
+qdrant-client>=1.7.0
+sentence-transformers>=2.2.2
 flask>=2.3.0
 flask-wtf>=1.2.0
 bootstrap-flask>=2.3.0  # Primary bootstrap package 
