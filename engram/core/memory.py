@@ -34,7 +34,13 @@ try:
     
     HAS_VECTOR_DB = True
     VECTOR_DB_NAME = "qdrant"
-    VECTOR_DB_VERSION = qdrant_client.__version__
+    
+    # Get version if available
+    try:
+        VECTOR_DB_VERSION = qdrant_client.__version__
+    except AttributeError:
+        # Package doesn't expose version directly
+        VECTOR_DB_VERSION = "unknown"
     
     logger.info(f"Vector storage library found: {VECTOR_DB_NAME} {VECTOR_DB_VERSION}")
     logger.info("Using vector-based memory implementation")
@@ -113,13 +119,25 @@ class MemoryService:
                     
                     if collection_name not in collection_names:
                         # Create new collection with the right vector size
-                        self.vector_client.create_collection(
-                            collection_name=collection_name,
-                            vectors_config=qdrant_client.models.VectorParams(
-                                size=self.vector_dim,
-                                distance=qdrant_client.models.Distance.COSINE
+                        try:
+                            # Try with newer API style
+                            from qdrant_client.http import models
+                            self.vector_client.create_collection(
+                                collection_name=collection_name,
+                                vectors_config=models.VectorParams(
+                                    size=self.vector_dim,
+                                    distance=models.Distance.COSINE
+                                )
                             )
-                        )
+                        except (ImportError, AttributeError):
+                            # Fall back to simpler API style
+                            self.vector_client.create_collection(
+                                collection_name=collection_name,
+                                vectors_config={
+                                    "size": self.vector_dim,
+                                    "distance": "Cosine"
+                                }
+                            )
                     
                     self.namespace_collections[namespace] = collection_name
                 
@@ -239,20 +257,37 @@ class MemoryService:
                 embedding = self.vector_model.encode(content_str)
                 
                 # Create the point to add to the vector database
-                self.vector_client.upsert(
-                    collection_name=collection_name,
-                    points=[
-                        qdrant_client.models.PointStruct(
-                            id=str(hash(memory_id)),  # Hash the ID to get a numeric ID
-                            vector=embedding.tolist(),
-                            payload={
+                try:
+                    # Try with the newer API style
+                    from qdrant_client.http import models
+                    self.vector_client.upsert(
+                        collection_name=collection_name,
+                        points=[
+                            models.PointStruct(
+                                id=hash(memory_id) % (2**63-1),  # Ensure it's a valid ID
+                                vector=embedding.tolist(),
+                                payload={
+                                    "id": memory_id,
+                                    "content": content_str,
+                                    "metadata": metadata
+                                }
+                            )
+                        ]
+                    )
+                except (ImportError, AttributeError):
+                    # Fall back to simpler API style
+                    self.vector_client.upsert(
+                        collection_name=collection_name,
+                        points=[{
+                            "id": hash(memory_id) % (2**63-1),
+                            "vector": embedding.tolist(),
+                            "payload": {
                                 "id": memory_id,
                                 "content": content_str,
                                 "metadata": metadata
                             }
-                        )
-                    ]
-                )
+                        }]
+                    )
                 
                 logger.debug(f"Added memory to vector DB in namespace {namespace} with ID {memory_id}")
                 return True
@@ -347,22 +382,49 @@ class MemoryService:
                 query_embedding = self.vector_model.encode(query)
                 
                 # Search the vector database
-                search_results = self.vector_client.search(
-                    collection_name=collection_name,
-                    query_vector=query_embedding.tolist(),
-                    limit=limit * 2  # Request more results to account for filtering
-                )
+                try:
+                    # Try with standard API
+                    search_results = self.vector_client.search(
+                        collection_name=collection_name,
+                        query_vector=query_embedding.tolist(),
+                        limit=limit * 2  # Request more results to account for filtering
+                    )
+                except TypeError:
+                    # Fall back to alternate API
+                    search_results = self.vector_client.search(
+                        collection_name=collection_name,
+                        vector=query_embedding.tolist(),
+                        limit=limit * 2
+                    )
                 
                 # Format the results
                 formatted_results = []
                 for result in search_results:
-                    payload = result.payload
-                    formatted_results.append({
-                        "id": payload.get("id", ""),
-                        "content": payload.get("content", ""),
-                        "metadata": payload.get("metadata", {}),
-                        "relevance": result.score
-                    })
+                    try:
+                        # Handle different result formats
+                        if hasattr(result, 'payload'):
+                            # Standard object format
+                            payload = result.payload
+                            score = getattr(result, 'score', 1.0)
+                        elif isinstance(result, dict):
+                            # Dictionary format
+                            payload = result.get('payload', {})
+                            score = result.get('score', 1.0)
+                        else:
+                            # Unknown format, try to adapt
+                            payload = getattr(result, 'payload', {})
+                            if not payload and hasattr(result, '__dict__'):
+                                payload = result.__dict__
+                            score = 1.0
+                                
+                        formatted_results.append({
+                            "id": payload.get("id", ""),
+                            "content": payload.get("content", ""),
+                            "metadata": payload.get("metadata", {}),
+                            "relevance": score
+                        })
+                    except Exception as e:
+                        logger.warning(f"Error formatting result: {e}, skipping")
                 
                 # Filter out forgotten items
                 if forgotten_items:
