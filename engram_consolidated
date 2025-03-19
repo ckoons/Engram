@@ -43,6 +43,10 @@ while [[ $# -gt 0 ]]; do
       CONFIG_PATH="$2"
       shift 2
       ;;
+    --fallback)
+      USE_FALLBACK=true
+      shift
+      ;;
     --no-auto-agency)
       NO_AUTO_AGENCY=true
       shift
@@ -61,6 +65,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --host <host>      Host to bind the server to (default: 127.0.0.1)"
       echo "  --data-dir <dir>   Directory to store memory data (default: ~/.engram)"
       echo "  --config <path>    Path to configuration file"
+      echo "  --fallback         Force use of fallback file-based implementation"
       echo "  --no-auto-agency   Disable automatic agency activation"
       echo "  --debug            Enable debug mode"
       echo "  --help             Show this help message"
@@ -123,6 +128,28 @@ fi
 
 if [ "$DEBUG" = true ]; then
     CMD="$CMD --debug"
+fi
+
+# Check for vector database dependencies
+if [ "$USE_FALLBACK" != true ]; then
+    echo -e "${YELLOW}Checking for vector database dependencies...${NC}"
+    if ! python -c "import chromadb" >/dev/null 2>&1; then
+        echo -e "${YELLOW}ChromaDB not found, using fallback mode${NC}"
+        export ENGRAM_USE_FALLBACK=1
+    elif ! python -c "import sentence_transformers" >/dev/null 2>&1; then
+        echo -e "${YELLOW}Sentence Transformers not found, using fallback mode${NC}"
+        export ENGRAM_USE_FALLBACK=1
+    else
+        echo -e "${GREEN}Vector database dependencies found - enabling vector search${NC}"
+        # Make absolutely sure we're not using fallback mode
+        export ENGRAM_USE_FALLBACK=0
+    fi
+fi
+
+# Set fallback environment variable if requested
+if [ "$USE_FALLBACK" = true ]; then
+    echo -e "${YELLOW}Using fallback memory implementation (no vector database)${NC}"
+    export ENGRAM_USE_FALLBACK=1
 fi
 
 # Start the server
