@@ -19,7 +19,7 @@ Claude Memory Bridge (CMB) is a project to give Claude persistent memory across 
   - Enhanced Retrieval: Context-aware memory loading
   - Nexus Interface: Standardized API for memory-enabled AI assistants
 - Multiple memory categories (personal, projects, facts, preferences, session, private)
-- Both vector-based (using Qdrant and sentence-transformers) and fallback memory implementations
+- Both vector-based (using ChromaDB and sentence-transformers) and fallback memory implementations
 - Auto-categorization based on content analysis
 - Memory digests for session start context
 - Simple Claude helper interface for store/retrieve operations
@@ -74,11 +74,20 @@ cd ~/projects/github/Engram
 # With custom client ID
 ./engram_consolidated --client-id project-x
 
+# Start in fallback mode (no vector database)
+./engram_consolidated --fallback
+
 # Check service status and start if needed
 ./engram_check.py --start
 
 # Test vector database integration
 ./vector_db_setup.py --test
+
+# Fix NumPy compatibility issues with vector database
+./vector_db_setup.py --fix-numpy
+
+# Install vector database dependencies
+./vector_db_setup.py --install
 
 # Run tests
 cd ~/projects/github/Engram
@@ -137,16 +146,16 @@ await process_message("Let's discuss the structured memory implementation", is_u
 await auto_remember("The structured memory system uses importance levels from 1 to 5")
 ```
 
-## Latest Updates (March 19, 2025)
+## Latest Updates (March 19, 2025 - v0.7.0)
 
 ### Memory System Improvements
 
 1. **Vector Storage Implementation**:
-   - Replaced mem0ai dependency with direct Qdrant and sentence-transformers integration
-   - Implemented native vector embedding and semantic search capabilities
-   - Enhanced error handling and graceful fallback to file-based storage
-   - Added comprehensive vector database testing tools
-   - Improved compatibility with different Qdrant client API versions
+   - Implemented ChromaDB as primary vector database backend
+   - Created comprehensive vector database testing and setup tools
+   - Added native vector embedding with sentence-transformers
+   - Enhanced error handling with graceful fallback to file-based storage
+   - Implemented proper dependency detection for vector components
 
 2. **Service Reliability**:
    - Fixed port conflict detection and handling
@@ -159,10 +168,13 @@ await auto_remember("The structured memory system uses importance levels from 1 
    - Added port availability checking before starting services
    - Improved error logging for better troubleshooting
    - Enhanced process management with proper PID tracking
+   - Added explicit fallback mode to handle NumPy 2.x compatibility issues
+   - Added --fallback flag to force file-based storage without vector dependencies
+   - Improved NumPy version detection with graceful degradation
 
 ### Implementation Status
 
-As of March 19, 2025, Engram has been enhanced with direct vector database integration using Qdrant and sentence-transformers. The system is designed to work correctly with or without vector database components while maintaining its core functionalities:
+As of March 19, 2025, Engram has been enhanced with direct vector database integration using ChromaDB and sentence-transformers. The system is designed to work correctly with or without vector database components while maintaining its core functionalities:
 
 - Storage and retrieval of memories works in all implementations
 - Semantic search with proper relevance scoring when vector DB is available  
