@@ -19,7 +19,7 @@ Claude Memory Bridge (CMB) is a project to give Claude persistent memory across 
   - Enhanced Retrieval: Context-aware memory loading
   - Nexus Interface: Standardized API for memory-enabled AI assistants
 - Multiple memory categories (personal, projects, facts, preferences, session, private)
-- Both vector-based (using mem0ai) and fallback memory implementations
+- Both vector-based (using Qdrant and sentence-transformers) and fallback memory implementations
 - Auto-categorization based on content analysis
 - Memory digests for session start context
 - Simple Claude helper interface for store/retrieve operations
@@ -68,21 +68,24 @@ IMPORTANT: Always include co-authorship credit in the commit message. This prope
 
 ```bash
 # Start memory bridge
-cd ~/projects/github/ClaudeMemoryBridge
-./cmb_start.sh
+cd ~/projects/github/Engram
+./engram_consolidated
 
 # With custom client ID
-./cmb_start.sh --client-id project-x
+./engram_consolidated --client-id project-x
 
 # Check service status and start if needed
-./cmb_check.py --start
+./engram_check.py --start
+
+# Test vector database integration
+./vector_db_setup.py --test
 
 # Run tests
-cd ~/projects/github/ClaudeMemoryBridge
+cd ~/projects/github/Engram
 python -m pytest tests
 
 # Install development version
-cd ~/projects/github/ClaudeMemoryBridge
+cd ~/projects/github/Engram
 pip install -e .
 ```
 
@@ -90,9 +93,9 @@ pip install -e .
 
 ```python
 # Import Structured Memory core components
-from cmb.core.structured_memory import StructuredMemory
-from cmb.core.nexus import NexusInterface
-from cmb.core.memory import MemoryService
+from engram.core.structured_memory import StructuredMemory
+from engram.core.nexus import NexusInterface
+from engram.core.memory import MemoryService
 
 # Initialize components
 memory_service = MemoryService(client_id="claude")
@@ -118,8 +121,8 @@ digest = await structured_memory.get_memory_digest(max_memories=10, include_priv
 
 ```python
 # Import QuickMem for structured memory and Nexus
-from cmb.cli.quickmem import memory_digest, start_nexus, process_message, auto_remember, end_nexus
-from cmb.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
+from engram.cli.quickmem import memory_digest, start_nexus, process_message, auto_remember, end_nexus
+from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
 
 # Get memory digest (ultra-short version: d)
 await memory_digest(max_memories=10)
@@ -134,15 +137,16 @@ await process_message("Let's discuss the structured memory implementation", is_u
 await auto_remember("The structured memory system uses importance levels from 1 to 5")
 ```
 
-## Latest Updates (March 17, 2025)
+## Latest Updates (March 19, 2025)
 
 ### Memory System Improvements
 
-1. **Vector Storage Compatibility**:
-   - Updated to support mem0ai library (replacing mem0)
-   - Improved error handling and graceful fallback to file-based storage
-   - Enhanced health check endpoint with detailed implementation status
-   - Better diagnostic information during startup
+1. **Vector Storage Implementation**:
+   - Replaced mem0ai dependency with direct Qdrant and sentence-transformers integration
+   - Implemented native vector embedding and semantic search capabilities
+   - Enhanced error handling and graceful fallback to file-based storage
+   - Added comprehensive vector database testing tools
+   - Improved compatibility with different Qdrant client API versions
 
 2. **Service Reliability**:
    - Fixed port conflict detection and handling
@@ -158,14 +162,15 @@ await auto_remember("The structured memory system uses importance levels from 1 
 
 ### Implementation Status
 
-As of March 17, 2025, Engram has been successfully migrated to work with both mem0ai (for vector search) and a fallback file-based implementation. The system is designed to work correctly without mem0ai while maintaining its core functionalities:
+As of March 19, 2025, Engram has been enhanced with direct vector database integration using Qdrant and sentence-transformers. The system is designed to work correctly with or without vector database components while maintaining its core functionalities:
 
 - Storage and retrieval of memories works in all implementations
+- Semantic search with proper relevance scoring when vector DB is available  
 - Context-aware memory loading functions correctly
 - Structured memory and Nexus interfaces operate as expected
 - Memory compartmentalization and expiration controls work in all modes
 
-When mem0ai is available, the system will automatically use vector search for enhanced retrieval. When mem0ai is unavailable, the system automatically falls back to file-based storage, with clear logging of the fallback status.
+When the vector database components are available, the system will automatically use vector search for enhanced semantic retrieval. When unavailable, the system automatically falls back to file-based storage with keyword matching, with clear logging of the fallback status.
 
 ## Future Enhancements
 
