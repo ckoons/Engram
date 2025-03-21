@@ -143,28 +143,47 @@ def enhance_prompt_with_memory(user_input, model_name, memory_handler):
 Create a function calling emulation layer that detects potential function calls in model outputs:
 
 ```python
-def detect_memory_operations(model_output, memory_handler):
-    """Detect and execute potential memory operations in model output."""
+def detect_memory_operations(model_output):
+    """Detect and execute memory operations in model output."""
+    operation_results = []
+    cleaned_output = model_output
     
-    # Patterns for memory operations
+    # Define patterns for memory operations with flexible formatting
     memory_patterns = [
-        (r"REMEMBER:\s*(.+)", memory_handler.store_memory),
-        (r"SEARCH:\s*(.+)", memory_handler.search_memories),
-        (r"RETRIEVE:\s*(\d+)", lambda n: memory_handler.get_recent_memories(int(n))),
+        (r"(?:REMEMBER:|(?:\*\*)?REMEMBER(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "store", MemoryHandler.store_memory),
+        (r"(?:SEARCH:|(?:\*\*)?SEARCH(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "search", MemoryHandler.search_memories),
+        (r"(?:RETRIEVE:|(?:\*\*)?RETRIEVE(?:\*\*)?:?)\s*(\d+)(?=\n|$)", "retrieve", lambda n: MemoryHandler.get_recent_memories(int(n))),
+        (r"(?:CONTEXT:|(?:\*\*)?CONTEXT(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "context", MemoryHandler.get_context_memories),
+        (r"(?:SEMANTIC:|(?:\*\*)?SEMANTIC(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "semantic", MemoryHandler.get_semantic_memories),
     ]
     
     # Check for patterns and execute corresponding functions
-    for pattern, func in memory_patterns:
+    for pattern, op_type, func in memory_patterns:
         matches = re.findall(pattern, model_output)
         for match in matches:
-            func(match)
+            try:
+                result = func(match)
+                operation_results.append({
+                    "type": op_type,
+                    "input": match,
+                    "result": result
+                })
+                # Remove the operation from the output
+                cleaned_output = re.sub(pattern, "", cleaned_output, count=1)
+            except Exception as e:
+                print(f"Error executing memory operation: {e}")
     
-    # Clean up the response by removing function call syntax
-    for pattern, _ in memory_patterns:
-        model_output = re.sub(pattern, "", model_output)
-    
-    return model_output.strip()
+    # Clean up extra newlines caused by removal
+    cleaned_output = re.sub(r'\n{3,}', '\n\n', cleaned_output)
+    return cleaned_output.strip(), operation_results
 ```
+
+The pattern detector is flexible and can recognize multiple formats:
+- Standard format: `REMEMBER: information`
+- Markdown bold: `**REMEMBER**: information`
+- With or without colons: `REMEMBER information`
+
+This flexibility helps accommodate various formatting styles that models might use.
 
 ### 3. System Prompt Design
 

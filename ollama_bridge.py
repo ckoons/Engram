@@ -131,11 +131,11 @@ class MemoryHandler:
         
         # Define patterns for memory operations
         memory_patterns = [
-            (r"REMEMBER:\s*(.+?)(?=\n|$)", "store", MemoryHandler.store_memory),
-            (r"SEARCH:\s*(.+?)(?=\n|$)", "search", MemoryHandler.search_memories),
-            (r"RETRIEVE:\s*(\d+)(?=\n|$)", "retrieve", lambda n: MemoryHandler.get_recent_memories(int(n))),
-            (r"CONTEXT:\s*(.+?)(?=\n|$)", "context", MemoryHandler.get_context_memories),
-            (r"SEMANTIC:\s*(.+?)(?=\n|$)", "semantic", MemoryHandler.get_semantic_memories),
+            (r"(?:REMEMBER:|(?:\*\*)?REMEMBER(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "store", MemoryHandler.store_memory),
+            (r"(?:SEARCH:|(?:\*\*)?SEARCH(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "search", MemoryHandler.search_memories),
+            (r"(?:RETRIEVE:|(?:\*\*)?RETRIEVE(?:\*\*)?:?)\s*(\d+)(?=\n|$)", "retrieve", lambda n: MemoryHandler.get_recent_memories(int(n))),
+            (r"(?:CONTEXT:|(?:\*\*)?CONTEXT(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "context", MemoryHandler.get_context_memories),
+            (r"(?:SEMANTIC:|(?:\*\*)?SEMANTIC(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "semantic", MemoryHandler.get_semantic_memories),
         ]
         
         # Check for patterns and execute corresponding functions
@@ -154,6 +154,8 @@ class MemoryHandler:
                 except Exception as e:
                     print(f"Error executing memory operation: {e}")
         
+        # Clean up extra newlines caused by removal
+        cleaned_output = re.sub(r'\n{3,}', '\n\n', cleaned_output)
         return cleaned_output.strip(), operation_results
     
     @staticmethod
@@ -223,8 +225,13 @@ To use this system, include special commands in your responses:
 - To get context-relevant memories: CONTEXT: {context description}
 - To find semantically similar memories: SEMANTIC: {query}
 
-Your memory commands will be processed automatically. Be sure to format your memory commands exactly as shown.
-Always place memory commands on their own line to ensure they are processed correctly."""
+Your memory commands will be processed automatically. The command format is flexible:
+- Standard format: REMEMBER: information
+- Markdown format: **REMEMBER**: information
+- With or without colons: REMEMBER information
+
+Always place memory commands on their own line to ensure they are processed correctly.
+When you use these commands, they will be processed and removed from your visible response."""
     
     # Check if Ollama is running
     try:
@@ -282,19 +289,22 @@ Always place memory commands on their own line to ensure they are processed corr
                     if content:
                         print(f"- {content[:80]}...")
                 
-                use_recent = input("Include recent memories in conversation? (y/n): ")
-                if use_recent.lower() == 'y':
-                    # Add memories to system prompt
-                    memory_text = "Here are some recent memories that might be relevant:\n"
-                    for mem in recent_memories:
-                        content = mem.get("content", "")
-                        if content:
-                            memory_text += f"- {content}\n"
-                    
-                    if args.system:
-                        args.system = args.system + "\n\n" + memory_text
-                    else:
-                        args.system = memory_text
+                try:
+                    use_recent = input("Include recent memories in conversation? (y/n): ")
+                    if use_recent.lower() == 'y':
+                        # Add memories to system prompt
+                        memory_text = "Here are some recent memories that might be relevant:\n"
+                        for mem in recent_memories:
+                            content = mem.get("content", "")
+                            if content:
+                                memory_text += f"- {content}\n"
+                        
+                        if args.system:
+                            args.system = args.system + "\n\n" + memory_text
+                        else:
+                            args.system = memory_text
+                except EOFError:
+                    print("\nDetected EOF during input. Continuing without recent memories...")
             else:
                 print("No recent memories found.")
         except Exception as e:
@@ -302,111 +312,115 @@ Always place memory commands on their own line to ensure they are processed corr
     
     # Main chat loop
     while True:
-        # Get user input
-        user_input = input("\nYou: ")
-        
-        # Handle special commands
-        if user_input.lower() in ['exit', '/quit']:
+        try:
+            # Get user input
+            user_input = input("\nYou: ")
+            
+            # Handle special commands
+            if user_input.lower() in ['exit', '/quit']:
+                break
+            elif user_input.lower() == '/reset':
+                chat_history = []
+                print("Chat history reset.")
+                continue
+            elif user_input.lower().startswith('/remember '):
+                # Save to memory
+                memory_text = user_input[10:]
+                if MEMORY_AVAILABLE:
+                    result = memory.store_memory(memory_text)
+                    print(f"Saved to memory: {memory_text}")
+                else:
+                    print("Memory functions not available.")
+                continue
+            elif user_input.lower() == '/memories':
+                # List recent memories
+                if MEMORY_AVAILABLE:
+                    recent_memories = memory.get_recent_memories(5)
+                    print("Recent memories:")
+                    for mem in recent_memories:
+                        content = mem.get("content", "")
+                        if content:
+                            print(f"- {content}")
+                else:
+                    print("Memory functions not available.")
+                continue
+            elif user_input.lower().startswith('/search '):
+                # Search memories
+                query = user_input[8:]
+                if MEMORY_AVAILABLE:
+                    results = memory.search_memories(query)
+                    print(f"Memory search results for '{query}':")
+                    for result in results:
+                        content = result.get("content", "")
+                        if content:
+                            print(f"- {content}")
+                else:
+                    print("Memory functions not available.")
+                continue
+        except EOFError:
+            print("\nDetected EOF. Exiting...")
             break
-        elif user_input.lower() == '/reset':
-            chat_history = []
-            print("Chat history reset.")
-            continue
-        elif user_input.lower().startswith('/remember '):
-            # Save to memory
-            memory_text = user_input[10:]
-            if MEMORY_AVAILABLE:
-                result = memory.store_memory(memory_text)
-                print(f"Saved to memory: {memory_text}")
-            else:
-                print("Memory functions not available.")
-            continue
-        elif user_input.lower() == '/memories':
-            # List recent memories
-            if MEMORY_AVAILABLE:
-                recent_memories = memory.get_recent_memories(5)
-                print("Recent memories:")
-                for mem in recent_memories:
-                    content = mem.get("content", "")
-                    if content:
-                        print(f"- {content}")
-            else:
-                print("Memory functions not available.")
-            continue
-        elif user_input.lower().startswith('/search '):
-            # Search memories
-            query = user_input[8:]
-            if MEMORY_AVAILABLE:
-                results = memory.search_memories(query)
-                print(f"Memory search results for '{query}':")
-                for result in results:
-                    content = result.get("content", "")
-                    if content:
-                        print(f"- {content}")
-            else:
-                print("Memory functions not available.")
-            continue
         
         # Add user message to chat history, optionally enhancing with memory
-    if MEMORY_AVAILABLE and args.memory_functions:
-        # If using memory functions, enhance with memory
-        enhanced_input = memory.enhance_prompt_with_memory(user_input)
-        if enhanced_input != user_input:
-            print("\n[Memory system: Enhancing prompt with relevant memories]")
-            chat_history.append({"role": "user", "content": enhanced_input})
+        if MEMORY_AVAILABLE and args.memory_functions:
+            # If using memory functions, enhance with memory
+            enhanced_input = memory.enhance_prompt_with_memory(user_input)
+            if enhanced_input != user_input:
+                print("\n[Memory system: Enhancing prompt with relevant memories]")
+                chat_history.append({"role": "user", "content": enhanced_input})
+            else:
+                chat_history.append({"role": "user", "content": user_input})
         else:
             chat_history.append({"role": "user", "content": user_input})
-    else:
-        chat_history.append({"role": "user", "content": user_input})
-    
-    # Call Ollama API
-    response = call_ollama_api(
-        model=args.model,
-        messages=chat_history,
-        system=args.system,
-        temperature=args.temperature,
-        top_p=args.top_p,
-        max_tokens=args.max_tokens
-    )
-    
-    if "error" in response:
-        print(f"Error: {response['error']}")
-        continue
-    
-    # Get assistant response
-    assistant_message = response.get("message", {}).get("content", "")
-    if assistant_message:
-        # Check for memory operations in response if memory functions are enabled
-        if MEMORY_AVAILABLE and args.memory_functions:
-            cleaned_message, memory_ops = memory.detect_memory_operations(assistant_message)
-            if memory_ops:
-                print("\n[Memory system: Detected memory operations]")
-                for op in memory_ops:
-                    op_type = op.get("type", "")
-                    op_input = op.get("input", "")
-                    if op_type == "store":
-                        print(f"[Memory system: Remembered '{op_input}']")
-                    elif op_type in ["search", "retrieve", "context", "semantic"]:
-                        print(f"[Memory system: {op_type.capitalize()} results for '{op_input}']")
-                        results = op.get("result", [])
-                        for i, result in enumerate(results[:3]):
-                            content = result.get("content", "")
-                            if content:
-                                print(f"  {i+1}. {content[:80]}...")
-                # Use the cleaned message for display and history
-                assistant_message = cleaned_message
-                
-        print(f"\n{args.model}: {assistant_message}")
         
-        # Add assistant message to chat history
-        chat_history.append({"role": "assistant", "content": assistant_message})
+        # Call Ollama API
+        response = call_ollama_api(
+            model=args.model,
+            messages=chat_history,
+            system=args.system,
+            temperature=args.temperature,
+            top_p=args.top_p,
+            max_tokens=args.max_tokens
+        )
         
-        # Automatically save significant interactions to memory
-        if MEMORY_AVAILABLE and len(user_input) > 20 and len(assistant_message) > 50:
-            memory_text = f"User asked: '{user_input}' and {args.model} responded: '{assistant_message[:100]}...'"
-            memory.store_memory(memory_text)
-    else:
-        print("Error: No response from model")
+        if "error" in response:
+            print(f"Error: {response['error']}")
+            continue
+    
+        # Get assistant response
+        assistant_message = response.get("message", {}).get("content", "")
+        if assistant_message:
+            # Check for memory operations in response if memory functions are enabled
+            if MEMORY_AVAILABLE and args.memory_functions:
+                cleaned_message, memory_ops = memory.detect_memory_operations(assistant_message)
+                if memory_ops:
+                    print("\n[Memory system: Detected memory operations]")
+                    for op in memory_ops:
+                        op_type = op.get("type", "")
+                        op_input = op.get("input", "")
+                        if op_type == "store":
+                            print(f"[Memory system: Remembered '{op_input}']")
+                        elif op_type in ["search", "retrieve", "context", "semantic"]:
+                            print(f"[Memory system: {op_type.capitalize()} results for '{op_input}']")
+                            results = op.get("result", [])
+                            for i, result in enumerate(results[:3]):
+                                content = result.get("content", "")
+                                if content:
+                                    print(f"  {i+1}. {content[:80]}...")
+                    # Use the cleaned message for display and history
+                    assistant_message = cleaned_message
+                    
+            print(f"\n{args.model}: {assistant_message}")
+            
+            # Add assistant message to chat history
+            chat_history.append({"role": "assistant", "content": assistant_message})
+            
+            # Automatically save significant interactions to memory
+            if MEMORY_AVAILABLE and len(user_input) > 20 and len(assistant_message) > 50:
+                memory_text = f"User asked: '{user_input}' and {args.model} responded: '{assistant_message[:100]}...'"
+                memory.store_memory(memory_text)
+        else:
+            print("Error: No response from model")
 
 if __name__ == "__main__":
     main()

@@ -1,256 +1,134 @@
 #!/usr/bin/env python3
 """
-Ollama Integration Test for Engram
-
-This script tests the integration between Engram and Ollama
-by performing basic memory operations with the Ollama API.
-
-Usage:
-    python test_ollama_integration.py [--model MODEL]
+Test the Ollama integration with Engram
+This script tests the integration between Ollama and Engram
 """
 
 import os
 import sys
-import argparse
-import json
+import time
+import unittest
+import subprocess
 import requests
-import asyncio
-from pathlib import Path
+import json
+from unittest.mock import patch, MagicMock
 
-# Add Engram to path if running directly
-ENGRAM_DIR = Path(__file__).parent.parent.absolute()
-if str(ENGRAM_DIR) not in sys.path:
-    sys.path.insert(0, str(ENGRAM_DIR))
+# Add the parent directory to the path so we can import from it
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
 
-# Try to import Engram memory functions
-try:
-    from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z, run
-    MEMORY_AVAILABLE = True
-except ImportError:
-    print("Warning: Engram memory functions not available")
-    MEMORY_AVAILABLE = False
+# Import the Ollama bridge module
+from ollama_bridge import MemoryHandler, call_ollama_api
 
-# Ollama API settings
-OLLAMA_API_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_API_URL = f"{OLLAMA_API_HOST}/api/chat"
-
-def test_ollama_availability():
-    """Test if Ollama server is running."""
-    try:
-        response = requests.get(f"{OLLAMA_API_HOST}/api/tags")
-        if response.status_code == 200:
-            print("✅ Ollama server is running")
-            available_models = [model["name"] for model in response.json().get("models", [])]
-            print(f"Available models: {', '.join(available_models)}")
-            return True, available_models
-        else:
-            print(f"❌ Ollama server returned status code: {response.status_code}")
-            return False, []
-    except requests.exceptions.ConnectionError:
-        print("❌ Ollama server is not running")
-        return False, []
-
-def test_memory_service():
-    """Test if Engram memory service is running."""
-    if not MEMORY_AVAILABLE:
-        print("❌ Engram memory functions not available")
-        return False
+class TestOllamaIntegration(unittest.TestCase):
+    """Test the Ollama integration with Engram"""
     
-    try:
-        status = s()
-        print(f"✅ Memory service status: {status}")
-        return True
-    except Exception as e:
-        print(f"❌ Error checking memory status: {e}")
-        return False
-
-def test_ollama_chat(model):
-    """Test a simple chat with Ollama."""
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "user", "content": "Hello, can you tell me what you are?"}
-        ],
-        "stream": False
-    }
-    
-    try:
-        response = requests.post(OLLAMA_API_URL, json=payload)
-        if response.status_code == 200:
-            result = response.json()
-            content = result.get("message", {}).get("content", "No content returned")
-            print(f"✅ Ollama model {model} responded successfully")
-            print(f"Response preview: {content[:100]}...")
-            return True
-        else:
-            print(f"❌ Ollama API returned status code: {response.status_code}")
-            return False
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error communicating with Ollama API: {e}")
-        return False
-
-class MemoryHandler:
-    """Helper class to handle async/sync memory operations."""
-    
-    @staticmethod
-    def store_memory(content: str):
-        """Store a memory, handling async/sync cases."""
+    def setUp(self):
+        """Set up the test environment"""
+        # Set the ENGRAM_CLIENT_ID environment variable
+        os.environ["ENGRAM_CLIENT_ID"] = "test-ollama"
+        self.memory = MemoryHandler()
+        
+        # Check if Ollama is running
+        self.ollama_running = False
         try:
-            return run(m(content))
-        except Exception as e:
-            print(f"Error storing memory: {e}")
-            return {"error": str(e)}
+            response = requests.get("http://localhost:11434/api/tags")
+            if response.status_code == 200:
+                self.ollama_running = True
+                
+                # Find an available model to use for testing
+                self.test_model = None
+                available_models = [model["name"] for model in response.json().get("models", [])]
+                
+                # Try to find a small model first, then fall back to any available model
+                preferred_models = ["llama3:8b", "mistral:7b", "gemma:2b", "tinyllama:1.1b"]
+                for model in preferred_models:
+                    if model in available_models:
+                        self.test_model = model
+                        break
+                
+                # If no preferred model found, use the first available model
+                if not self.test_model and available_models:
+                    self.test_model = available_models[0]
+                
+                print(f"Using Ollama model: {self.test_model}")
+        except:
+            print("Ollama is not running, skipping API tests")
     
-    @staticmethod
-    def store_tagged_memory(content: str, tags):
-        """Store a tagged memory, handling async/sync cases."""
-        try:
-            return run(t(content, tags))
-        except Exception as e:
-            print(f"Error storing tagged memory: {e}")
-            return {"error": str(e)}
+    def test_memory_handler_instantiation(self):
+        """Test that the MemoryHandler can be instantiated"""
+        self.assertIsInstance(self.memory, MemoryHandler)
     
-    @staticmethod
-    def get_recent_memories(count: int = 5):
-        """Get recent memories, handling async/sync cases."""
-        try:
-            return run(l(count))
-        except Exception as e:
-            print(f"Error getting recent memories: {e}")
-            return []
-
-def test_memory_operations():
-    """Test basic memory operations."""
-    if not MEMORY_AVAILABLE:
-        print("❌ Skipping memory operations test - memory functions not available")
-        return False
-    
-    memory = MemoryHandler()
-    
-    try:
-        # Store a memory
-        memory_text = "This is a test memory from the Ollama integration test"
-        result = memory.store_memory(memory_text)
-        print(f"✅ Stored memory: {memory_text}")
+    @unittest.skipIf(not os.environ.get("ENGRAM_MEMORY_TEST"), "Skipping memory test")
+    def test_memory_store_retrieve(self):
+        """Test storing and retrieving memories"""
+        # Store a test memory
+        test_memory = "This is a test memory from the Ollama integration test"
+        result = self.memory.store_memory(test_memory)
+        self.assertIsNotNone(result)
         
         # Retrieve recent memories
-        recent = memory.get_recent_memories(1)
-        if recent and len(recent) > 0:
-            content = recent[0].get("content", "")
-            if memory_text in content:
-                print("✅ Successfully retrieved stored memory")
-            else:
-                print(f"❌ Retrieved memory doesn't match: {content}")
-                return False
-        else:
-            print("❌ Failed to retrieve stored memory")
-            return False
+        recent = self.memory.get_recent_memories(1)
+        self.assertGreaterEqual(len(recent), 1)
         
-        # Store a tagged memory
-        thought_text = "Ollama integration with Engram seems to be working well"
-        result = memory.store_tagged_memory(thought_text, ["test", "ollama", "integration"])
-        print(f"✅ Stored tagged memory: {thought_text}")
+        # Search for the test memory
+        search_results = self.memory.search_memories("test memory")
+        self.assertGreaterEqual(len(search_results), 1)
+    
+    def test_detect_memory_operations(self):
+        """Test detecting and executing memory operations in model output"""
+        # Mock the memory functions
+        with patch.object(MemoryHandler, 'store_memory', return_value={"id": "123"}), \
+             patch.object(MemoryHandler, 'search_memories', return_value=[{"content": "test"}]), \
+             patch.object(MemoryHandler, 'get_recent_memories', return_value=[{"content": "recent"}]):
+            
+            # Test a model output with a memory operation
+            model_output = "Here's what I know.\n\nREMEMBER: Important information to store\n\nAnd here's more."
+            cleaned_output, operations = self.memory.detect_memory_operations(model_output)
+            
+            # Check that the operation was detected and executed
+            self.assertEqual(len(operations), 1)
+            self.assertEqual(operations[0]["type"], "store")
+            self.assertEqual(operations[0]["input"], "Important information to store")
+            
+            # Check that the operation was removed from the output
+            self.assertNotIn("REMEMBER:", cleaned_output)
+            self.assertEqual(cleaned_output, "Here's what I know.\n\nAnd here's more.")
+    
+    @unittest.skipIf(not os.environ.get("ENGRAM_API_TEST"), "Skipping API test")
+    def test_ollama_api_call(self):
+        """Test calling the Ollama API"""
+        if not self.ollama_running or not self.test_model:
+            self.skipTest("Ollama is not running or no test model available")
         
-        # Check memory service status
-        status = s()
-        print(f"✅ Memory service is still running: {status}")
+        # Call the Ollama API
+        messages = [{"role": "user", "content": "Say hello"}]
+        response = call_ollama_api(
+            model=self.test_model, 
+            messages=messages,
+            temperature=0.5
+        )
         
-        return True
-    except Exception as e:
-        print(f"❌ Error during memory operations: {e}")
-        return False
+        # Check the response
+        self.assertIn("message", response)
+        self.assertIn("content", response["message"])
+        print(f"Ollama response: {response['message']['content'][:50]}...")
+    
+    def test_enhance_prompt_with_memory(self):
+        """Test enhancing a prompt with memory"""
+        with patch.object(MemoryHandler, 'get_semantic_memories', return_value=[{"content": "test memory"}]):
+            # Test enhancing a prompt that should trigger memory retrieval
+            user_input = "Do you remember what I told you about test memories?"
+            enhanced = self.memory.enhance_prompt_with_memory(user_input)
+            
+            # Check that the prompt was enhanced
+            self.assertIn("Here are some relevant memories", enhanced)
+            self.assertIn("test memory", enhanced)
+            self.assertIn(user_input, enhanced)
 
-def main():
-    """Main test function."""
-    parser = argparse.ArgumentParser(description="Test Ollama integration with Engram")
-    parser.add_argument("--model", type=str, default="llama3:8b", 
-                        help="Ollama model to test (default: llama3:8b)")
-    args = parser.parse_args()
-    
-    # Set client ID for testing
-    os.environ["ENGRAM_CLIENT_ID"] = "ollama_test"
-    
-    print("\n===== Ollama Integration Test =====\n")
-    
-    # Step 1: Check if Ollama is running
-    ollama_available, available_models = test_ollama_availability()
-    if not ollama_available:
-        print("\n❌ Test failed: Ollama server is not running")
-        print("Please start Ollama with: ollama serve")
-        return False
-    
-    # Check if requested model is available
-    if args.model not in available_models:
-        print(f"\n⚠️ Warning: Model {args.model} not found in available models")
-        print(f"Available models: {', '.join(available_models)}")
-        
-        # See if any model name could be a match (partial match)
-        similar_models = [m for m in available_models if args.model.split(':')[0] in m]
-        if similar_models:
-            print(f"Found similar models: {', '.join(similar_models)}")
-            print(f"Using {similar_models[0]} instead of {args.model}")
-            args.model = similar_models[0]
-            return True
-        
-        # Prepare auto-response for CI environments
-        auto_proceed = os.environ.get("ENGRAM_AUTO_PULL", "")
-        if auto_proceed.lower() in ["1", "true", "yes", "y"]:
-            proceed = "y"
-            print("Auto-proceeding with model pull (ENGRAM_AUTO_PULL=true)")
-        else:
-            # Normal interactive mode
-            try:
-                proceed = input("Do you want to pull this model now? (y/n): ")
-            except (EOFError, KeyboardInterrupt):
-                print("\nNon-interactive environment detected, skipping model pull")
-                if "llama3" in args.model:
-                    # For llama3 models, try using the latest
-                    if "llama3:latest" in available_models:
-                        print(f"Using llama3:latest instead of {args.model}")
-                        args.model = "llama3:latest"
-                        return True
-                return False
-                
-        if proceed.lower() == 'y':
-            print(f"Pulling model {args.model}...")
-            pull_response = requests.post(f"{OLLAMA_API_HOST}/api/pull", json={"name": args.model})
-            if pull_response.status_code != 200:
-                print(f"❌ Error pulling model: {pull_response.status_code}")
-                return False
-            print(f"✅ Model {args.model} pulled successfully!")
-        else:
-            print("Please choose an available model or pull the requested model first")
-            return False
-    
-    # Step 2: Check if memory service is running
-    memory_available = test_memory_service()
-    if not memory_available:
-        print("\n⚠️ Warning: Memory service is not available")
-        print("Basic Ollama communication will still be tested")
-    
-    # Step 3: Test Ollama chat
-    chat_works = test_ollama_chat(args.model)
-    if not chat_works:
-        print("\n❌ Test failed: Could not communicate with Ollama API")
-        return False
-    
-    # Step 4: Test memory operations if available
-    if memory_available:
-        memory_works = test_memory_operations()
-        if not memory_works:
-            print("\n⚠️ Warning: Memory operations failed")
-    
-    # Final status
-    if ollama_available and chat_works:
-        if memory_available:
-            print("\n✅ All tests passed! Ollama integration with Engram is working correctly.")
-        else:
-            print("\n⚠️ Partial success: Ollama is working but Engram memory service is not available.")
-        return True
-    else:
-        print("\n❌ Test failed: One or more components are not working correctly.")
-        return False
+def run_tests():
+    """Run the test suite"""
+    unittest.main()
 
 if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+    run_tests()

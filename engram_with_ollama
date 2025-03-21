@@ -43,6 +43,7 @@ while [[ $# -gt 0 ]]; do
       echo "  engram_with_ollama --client-id ollama2   # Launch with client ID 'ollama2'"
       echo "  engram_with_ollama --memory-only         # Only start memory service without Ollama"
       echo "  engram_with_ollama --memory-functions    # Enable model to use REMEMBER:, SEARCH: commands"
+      echo "  engram_with_ollama --memory-functions llama3:8b   # Enable model with memory commands"
       exit 0
       ;;
     *)

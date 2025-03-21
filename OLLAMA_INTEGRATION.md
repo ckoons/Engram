@@ -37,6 +37,27 @@ During a chat session, you can use:
 - `/reset`: Reset chat history
 - `/quit` or `exit`: Exit the session
 
+## Memory Function Emulation
+
+Enable function-calling emulation with the `--memory-functions` flag:
+
+```bash
+engram_with_ollama llama3:8b --memory-functions
+```
+
+This allows the model to use special commands in its responses:
+
+- `REMEMBER: text` - Store information in memory
+- `SEARCH: query` - Search for memories
+- `RETRIEVE: 5` - Get recent memories
+- `CONTEXT: topic` - Get memories relevant to a context
+- `SEMANTIC: query` - Get semantically similar memories
+
+The commands are flexible and can be written in different formats:
+- `REMEMBER: information`
+- `**REMEMBER**: information`
+- `REMEMBER information`
+
 ## Known Issues & Fixes
 
 If you encounter a "'coroutine' object is not iterable" error or "RuntimeWarning: coroutine was never awaited" warning, you need to update the bridge script:
