@@ -1,8 +1,8 @@
-# Claude Memory Bridge Development Notes
+# Engram Memory System Development Notes
 
 ## Project Overview
 
-Claude Memory Bridge (CMB) is a project to give Claude persistent memory across different sessions. The project aims to:
+Engram (formerly Claude Memory Bridge) is a project to give Claude persistent memory across different sessions. The project aims to:
 
 1. Allow Claude to remember past conversations
 2. Enable Claude to store and retrieve its own thoughts
@@ -146,43 +146,44 @@ await process_message("Let's discuss the structured memory implementation", is_u
 await auto_remember("The structured memory system uses importance levels from 1 to 5")
 ```
 
-## Latest Updates (March 19, 2025 - v0.7.0)
+## Latest Updates (March 21, 2025 - v0.8.0)
 
-### Memory System Improvements
+### System Improvements
 
-1. **Vector Storage Implementation**:
-   - Implemented ChromaDB as primary vector database backend
-   - Created comprehensive vector database testing and setup tools
-   - Added native vector embedding with sentence-transformers
+1. **FAISS Vector Database Integration**:
+   - Replaced ChromaDB with FAISS for vector storage
+   - Created deterministic embedding approach that doesn't require external models
+   - Ensured NumPy 2.x compatibility for all vector operations
    - Enhanced error handling with graceful fallback to file-based storage
-   - Implemented proper dependency detection for vector components
+   - Simplified dependency management with fewer requirements
 
-2. **Service Reliability**:
-   - Fixed port conflict detection and handling
-   - Improved service startup and status checking
-   - Added comprehensive error reporting during service initialization
-   - Enhanced health endpoint with implementation details
+2. **CMB Package Removal**:
+   - Completely removed the `cmb/` directory
+   - Provided `cmb_compat.py` compatibility layer for legacy code
+   - Updated all imports in tests, examples, and scripts
+   - Ensured environment variables follow ENGRAM_* naming convention
+   - Updated documentation with complete migration details
 
-3. **Engram Script Enhancements**:
-   - Fixed issue with engram_with_claude script detection of running services
-   - Added port availability checking before starting services
-   - Improved error logging for better troubleshooting
-   - Enhanced process management with proper PID tracking
-   - Added explicit fallback mode to handle NumPy 2.x compatibility issues
-   - Added --fallback flag to force file-based storage without vector dependencies
-   - Improved NumPy version detection with graceful degradation
+3. **Ollama Integration**:
+   - Enhanced Ollama bridge with improved memory function detection
+   - Added communication capabilities between AI models
+   - Implemented standardized system prompts for different Ollama models
+   - Created model-specific personas (Echo, Mist, Mix, Phi)
+   - Added direct FAISS launcher for Ollama integration
 
 ### Implementation Status
 
-As of March 19, 2025, Engram has been enhanced with direct vector database integration using ChromaDB and sentence-transformers. The system is designed to work correctly with or without vector database components while maintaining its core functionalities:
+As of March 21, 2025, Engram has been completely migrated to use FAISS for vector database operations, ensuring compatibility with NumPy 2.x while maintaining all core functionalities:
 
 - Storage and retrieval of memories works in all implementations
-- Semantic search with proper relevance scoring when vector DB is available  
+- Semantic search with proper relevance scoring via FAISS
 - Context-aware memory loading functions correctly
 - Structured memory and Nexus interfaces operate as expected
 - Memory compartmentalization and expiration controls work in all modes
+- AI-to-AI communication capabilities via standardized memory format
+- Compatibility layer for legacy code using the old 'cmb' namespace
 
-When the vector database components are available, the system will automatically use vector search for enhanced semantic retrieval. When unavailable, the system automatically falls back to file-based storage with keyword matching, with clear logging of the fallback status.
+When the vector database components are available, the system will automatically use FAISS for enhanced semantic retrieval. When unavailable, the system automatically falls back to file-based storage with keyword matching, with clear logging of the fallback status.
 
 ## Future Enhancements
 
