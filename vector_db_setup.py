@@ -32,41 +32,34 @@ logger = logging.getLogger("engram.vector_setup")
 
 # Required packages
 REQUIRED_PACKAGES = [
-    "numpy<2.0.0",  # Force numpy 1.x for compatibility with sentence-transformers
-    "chromadb>=0.6.0",  # Primary vector database (preferred)
-    "qdrant-client>=1.7.0",  # Alternative vector database (legacy)
-    "sentence-transformers>=2.2.2",  # For generating embeddings
+    "faiss-cpu",  # Vector database (use faiss-gpu for CUDA support)
+    "numpy",      # No version restriction, works with any NumPy version
 ]
 
 def check_packages():
     """Check if required packages are installed and importable."""
     missing_packages = []
     
-    # Special check for NumPy version
+    # Check NumPy version
     try:
         import numpy
         numpy_version = numpy.__version__
-        major_version = int(numpy_version.split('.')[0])
-        if major_version >= 2:
-            logger.warning(f"❌ NumPy version {numpy_version} detected. Version 1.x is required for compatibility.")
-            missing_packages.append("numpy<2.0.0")
-        else:
-            logger.info(f"✅ NumPy version {numpy_version} is compatible")
+        logger.info(f"✅ NumPy version {numpy_version} is compatible")
     except ImportError:
         logger.warning("❌ NumPy is not installed")
-        missing_packages.append("numpy<2.0.0")
+        missing_packages.append("numpy")
     
-    for package in REQUIRED_PACKAGES:
-        if package.startswith("numpy"):
-            continue  # Already checked NumPy above
-            
-        package_name = package.split('>=')[0].split('==')[0].split('<')[0]
+    # Check FAISS
+    try:
+        import faiss
         try:
-            __import__(package_name.replace('-', '_'))
-            logger.info(f"✅ Package {package_name} is installed")
-        except ImportError:
-            logger.warning(f"❌ Package {package_name} is not installed or not importable")
-            missing_packages.append(package)
+            version = faiss.__version__
+        except AttributeError:
+            version = "unknown"
+        logger.info(f"✅ Package faiss-cpu is installed (version: {version})")
+    except ImportError:
+        logger.warning("❌ Package faiss-cpu is not installed or not importable")
+        missing_packages.append("faiss-cpu")
     
     return missing_packages
 
@@ -92,174 +85,72 @@ def install_packages(packages):
 
 def verify_vector_db():
     """Verify that the vector database components are working properly."""
-    # First try ChromaDB (preferred)
     try:
-        import chromadb
-        from sentence_transformers import SentenceTransformer
+        import faiss
+        import numpy as np
         
         # Check version if available
         try:
-            version = chromadb.__version__
+            version = faiss.__version__
         except AttributeError:
             version = "unknown"
             
-        logger.info(f"ChromaDB installed (version: {version})")
+        logger.info(f"FAISS installed (version: {version})")
         
-        # Create temporary client
+        # Create temporary directory for testing
         with tempfile.TemporaryDirectory() as temp_dir:
-            client = chromadb.PersistentClient(path=temp_dir)
+            # Create a test index
+            dimension = 128
+            index = faiss.IndexFlatL2(dimension)
             
-            # Create a test collection
-            collection = client.create_collection(
-                name="test_collection",
-                embedding_function=None  # We'll provide embeddings explicitly
-            )
+            logger.info("✅ Successfully created FAISS test index")
             
-            logger.info("✅ Successfully created ChromaDB test collection")
-            
-            # Test sentence transformer model loading
-            logger.info("Testing sentence transformer model loading...")
-            model = SentenceTransformer("all-MiniLM-L6-v2")
-            
-            # Test creating an embedding
-            test_embedding = model.encode("This is a test sentence")
-            embedding_size = len(test_embedding)
+            # Create a test embedding
+            embedding = np.random.random(dimension).astype(np.float32)
+            embedding_size = len(embedding)
             
             if embedding_size > 0:
                 logger.info(f"✅ Successfully created embedding of size {embedding_size}")
                 
-                # Test adding to collection
-                collection.add(
-                    ids=["test1"],
-                    embeddings=[test_embedding.tolist()],
-                    documents=["This is a test sentence"],
-                    metadatas=[{"source": "test"}]
-                )
-                logger.info("✅ Successfully added document to ChromaDB")
+                # Add to index
+                index.add(np.array([embedding]))
+                logger.info("✅ Successfully added document to FAISS")
                 
-                # Test querying
-                results = collection.query(
-                    query_embeddings=[test_embedding.tolist()],
-                    n_results=1
-                )
+                # Test searching
+                distances, indices = index.search(np.array([embedding]), 1)
                 
-                if len(results["ids"][0]) > 0:
-                    logger.info("✅ Successfully queried ChromaDB")
-                    return True
+                if len(indices) > 0 and indices[0][0] == 0:
+                    logger.info("✅ Successfully queried FAISS")
+                    
+                    # Save the index to file
+                    index_path = os.path.join(temp_dir, "test.index")
+                    faiss.write_index(index, index_path)
+                    
+                    # Load the index from file
+                    loaded_index = faiss.read_index(index_path)
+                    if loaded_index.ntotal == 1:
+                        logger.info("✅ Successfully saved and loaded FAISS index")
+                        return True
+                    else:
+                        logger.error("❌ Failed to load FAISS index from file")
+                        return False
                 else:
-                    logger.error("❌ Failed to query ChromaDB")
+                    logger.error("❌ Failed to query FAISS")
                     return False
             else:
                 logger.error("❌ Failed to create embedding")
                 return False
     
     except Exception as e:
-        logger.warning(f"ChromaDB verification failed: {e}")
-        logger.warning("Falling back to Qdrant verification")
-        
-        # Fall back to Qdrant if ChromaDB isn't available
-        try:
-            import qdrant_client
-            from sentence_transformers import SentenceTransformer
-            
-            # Some packages don't expose __version__ directly
-            try:
-                version = qdrant_client.__version__
-            except AttributeError:
-                version = "unknown"
-                
-            logger.info(f"Qdrant client installed (version: {version})")
-            
-            # Test creating a simple client
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # For qdrant-client 0.11.9, the parameter is 'location', not 'path'
-                try:
-                    client = qdrant_client.QdrantClient(path=temp_dir)
-                except TypeError:
-                    # Try with location parameter for older clients
-                    client = qdrant_client.QdrantClient(location=temp_dir)
-                
-                # Create a simple collection
-                vector_size = 384  # Default for "all-MiniLM-L6-v2"
-                
-                # Try the simplest approach with dimension parameter (works with newer clients)
-                try:
-                    client.create_collection(
-                        collection_name="test_collection",
-                        dimension=vector_size
-                    )
-                except Exception as e:
-                    logger.warning(f"First collection creation attempt failed: {e}")
-                    # Try direct dictionary-based config as fallback
-                    try:
-                        client.create_collection(
-                            collection_name="test_collection",
-                            vectors_config={
-                                "size": vector_size,
-                                "distance": "Cosine"
-                            }
-                        )
-                    except Exception as e2:
-                        logger.warning(f"Second collection creation attempt failed: {e2}")
-                        # Try the approach with explicit models
-                        try:
-                            from qdrant_client import QdrantClient
-                            from qdrant_client.http import models
-                            
-                            # Try to create a model without strict validation
-                            logger.info("Trying alternative collection creation method...")
-                            
-                            # Use the raw API parameters directly
-                            client.create_collection(
-                                collection_name="test_collection",
-                                vectors_config={"size": vector_size, "distance": "Cosine"},
-                                hnsw_config=None,
-                                optimizers_config=None,
-                                wal_config=None,
-                                on_disk_payload=False,
-                                write_consistency_factor=None
-                            )
-                        except Exception as e3:
-                            logger.error(f"All collection creation attempts failed. Last error: {e3}")
-                            logger.error("This likely indicates a compatibility issue with qdrant-client and Pydantic.")
-                            
-                            # We'll still return True for this test, as the issue is specific to Pydantic validation
-                            # not with the core vector database functionality
-                            logger.warning("Proceeding with tests despite collection creation issues")
-                
-                # Check if the collection was created
-                collections = client.get_collections().collections
-                collection_names = [c.name for c in collections]
-                
-                if "test_collection" in collection_names:
-                    logger.info("✅ Successfully created test collection with Qdrant")
-                else:
-                    logger.error("❌ Failed to create test collection with Qdrant")
-                    return False
-            
-            # Test loading a model - this will download it if not present
-            logger.info("Testing sentence transformer model loading...")
-            model = SentenceTransformer("all-MiniLM-L6-v2")
-            
-            # Test creating an embedding
-            test_embedding = model.encode("This is a test sentence")
-            if len(test_embedding) > 0:
-                logger.info(f"✅ Successfully created embedding of size {len(test_embedding)}")
-                return True
-            else:
-                logger.error("❌ Failed to create embedding")
-                return False
-        
-        except Exception as e:
-            logger.error(f"Error verifying vector database: {e}")
-            return False
+        logger.error(f"Error verifying FAISS vector database: {e}")
+        logger.error("FAISS is required for vector search capabilities.")
+        return False
 
 def test_engram_with_vector():
     """Test Engram with vector database integration."""
     try:
         # Import Engram modules
         from engram.core.memory import MemoryService, HAS_VECTOR_DB, VECTOR_DB_NAME
-        from engram.core.structured_memory import StructuredMemory
         
         if not HAS_VECTOR_DB:
             logger.error("❌ Vector database not recognized by Engram")
@@ -321,31 +212,12 @@ def main():
     parser = argparse.ArgumentParser(description="Vector Database Setup for Engram")
     parser.add_argument("--install", action="store_true", help="Install required vector database dependencies")
     parser.add_argument("--test", action="store_true", help="Run vector database test after setup")
-    parser.add_argument("--fix-numpy", action="store_true", help="Fix NumPy compatibility issues")
     
     args = parser.parse_args()
     
     print("\n" + "="*60)
-    print("ENGRAM VECTOR DATABASE SETUP")
+    print("ENGRAM VECTOR DATABASE SETUP (FAISS)")
     print("="*60 + "\n")
-    
-    # Check for NumPy 2.x compatibility issues
-    try:
-        import numpy
-        numpy_version = numpy.__version__
-        major_version = int(numpy_version.split('.')[0])
-        if major_version >= 2:
-            print(f"\n⚠️  NumPy {numpy_version} detected. This version may cause compatibility issues.")
-            print("   The vector database integration requires NumPy 1.x for full compatibility.")
-            print("   Run this script with --install to downgrade NumPy to a compatible version.\n")
-            
-            if args.fix_numpy or args.install:
-                print("   Proceeding with NumPy downgrade as requested...")
-            else:
-                print("   To fix this issue automatically, run:")
-                print("   python vector_db_setup.py --fix-numpy\n")
-    except ImportError:
-        pass  # NumPy not installed, will be handled by the regular package check
     
     # Check for required packages
     missing_packages = check_packages()
@@ -386,8 +258,7 @@ def main():
                 logger.info("\n" + "="*60)
                 logger.info("WORKAROUND GUIDANCE")
                 logger.info("="*60)
-                logger.info("The vector database test failed, likely due to validation issues with the")
-                logger.info("Qdrant client and Pydantic libraries. To work around this issue:")
+                logger.info("The vector database test failed. To work around this issue:")
                 logger.info("")
                 logger.info("1. Use the fallback mode in Engram by setting this environment variable:")
                 logger.info("   export ENGRAM_USE_FALLBACK=1")

@@ -3,6 +3,7 @@ Legacy Claude Memory Bridge Core Module
 
 This module is maintained for backward compatibility only.
 Imports are forwarded from the new 'engram.core' package.
+Now uses FAISS for NumPy 2.x compatibility.
 """
 
 import warnings

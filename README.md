@@ -58,11 +58,12 @@ Engram provides AI systems with the ability to maintain memory traces across dif
   - Cross-session persistence with vector search
 
 - **Vector Database Integration**:
-  - ChromaDB for high-performance semantic search
-  - Sentence embeddings for concept-level memory retrieval
+  - FAISS for high-performance semantic search (NumPy 2.x compatible)
+  - Simple deterministic embeddings without external dependencies
   - Automatic vector database detection and initialization
   - Graceful fallback to file-based storage when needed
   - Relevance scoring for better memory retrieval
+  - Optional GPU acceleration for large memory collections
 
 - **Shared Understanding**:
   - Enables meaningful continuity in human-AI collaboration
@@ -264,7 +265,7 @@ pip install -r requirements.txt
 pip install -e .
 
 # For vector database support (optional but recommended)
-python vector_db_setup.py --install
+pip install faiss-cpu  # Use faiss-gpu for GPU acceleration
 
 # For Ollama support (optional)
 # Install Ollama from https://ollama.ai
@@ -291,7 +292,7 @@ python -m cmb.web.app  # Web UI only (requires memory service)
 - [Configuration](docs/configuration.md): Customize Engram to your preferences
 - [Consolidated Server](docs/consolidated_server.md): Single-port server for simplified deployment
 - [Structured Memory](docs/structured_memory.md): Balanced memory system with importance ranking
-- [Vector Database](docs/vector_database.md): Semantic search with ChromaDB integration
+- [Vector Database](docs/vector_database.md): Semantic search with FAISS integration
 - [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
 - [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration
 - [Privacy Guide](docs/privacy.md): Private encrypted memories and security features

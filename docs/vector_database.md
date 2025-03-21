@@ -14,11 +14,12 @@ Engram uses vector databases to store and retrieve memories based on semantic si
 
 Engram currently supports the following vector database implementations:
 
-1. **ChromaDB** (Primary Implementation)
-   - Fast, lightweight vector database
-   - Persistent storage with automatic collection management
-   - Low resource requirements
-   - Supports custom embedding models
+1. **FAISS (Facebook AI Similarity Search)** - Primary Implementation
+   - High-performance similarity search and clustering
+   - NumPy 2.x compatible (works with any NumPy version)
+   - Optional GPU acceleration
+   - Minimal dependencies
+   - Fast and efficient vector operations
 
 ## Installation Requirements
 
@@ -26,7 +27,9 @@ To use the vector database functionality, you need to install the following Pyth
 
 ```bash
 # Install required packages
-pip install chromadb>=0.6.0 sentence-transformers>=2.2.2
+pip install faiss-cpu  # Basic CPU version
+# OR
+pip install faiss-gpu  # GPU-accelerated version (requires CUDA)
 ```
 
 You can also use the provided setup utility to verify your installation:
@@ -37,12 +40,15 @@ python vector_db_setup.py --test
 
 ## Embeddings
 
-Engram uses the `sentence-transformers` library to generate embeddings from text. By default, it uses the `all-MiniLM-L6-v2` model, which provides:
+Engram uses a simple deterministic embedding approach that doesn't require external models like sentence-transformers:
 
-- Good semantic representation with a vector size of 384 dimensions
-- Fast inference speed
-- Reasonable memory usage
-- Good balance of performance and resource requirements
+- Lightweight embedding generation that works with any Python environment
+- Consistent 128-dimensional embeddings
+- Token-based approach with TF-IDF inspired weighting
+- Deterministic results for the same input text
+- No large model downloads required
+
+While this approach may not match the semantic quality of deep learning models like sentence-transformers, it provides good results for memory retrieval with minimal dependencies.
 
 ## Configuration
 
@@ -66,7 +72,7 @@ You can also use command-line options when starting the consolidated server:
 
 Engram is designed to gracefully degrade if vector database components are not available:
 
-1. If ChromaDB is not installed, the system will automatically fall back to file-based storage
+1. If FAISS is not installed, the system will automatically fall back to file-based storage
 2. If embedding generation fails, the system will fall back to file-based storage
 3. Any errors during vector operations will trigger fallback to ensure memory operations continue to work
 
@@ -81,13 +87,12 @@ Engram includes a utility script to verify vector database functionality:
 python vector_db_setup.py --test
 
 # Output example
-✅ NumPy version 1.26.4 is compatible
-✅ Package chromadb is installed
-✅ Package sentence-transformers is installed
-✅ Successfully created ChromaDB test collection
-✅ Successfully created embedding of size 384
-✅ Successfully added document to ChromaDB
-✅ Successfully queried ChromaDB
+✅ NumPy version 2.0.0 is compatible
+✅ Package faiss-cpu is installed
+✅ Successfully created FAISS test index
+✅ Successfully created embedding of size 128
+✅ Successfully added document to FAISS
+✅ Successfully queried FAISS
 ✅ Vector database verification successful
 ```
 
@@ -95,14 +100,15 @@ python vector_db_setup.py --test
 
 ### Resource Usage
 
-- ChromaDB stores indexes and data on disk by default
-- Embedding generation is computationally intensive but happens once per memory
-- Search operations are fast and efficient once embeddings are generated
+- FAISS stores indexes and data on disk only when saved
+- Embedding generation is fast and efficient
+- Search operations are optimized for speed
+- GPU acceleration can significantly improve performance for large collections
 
 ### Scaling
 
 - For large memory collections (>100k memories), consider:
-  - Using a dedicated machine for the memory service
+  - Using GPU acceleration with `faiss-gpu`
   - Monitoring memory usage and disk space
   - Implementing memory pruning strategies
 
@@ -118,46 +124,43 @@ The vector database is integrated into several key components:
 
 Using vector database does not change Engram's API. All existing endpoints work the same way, but with enhanced semantic search capabilities.
 
+## Migration from ChromaDB
+
+If you previously used ChromaDB with Engram, your existing memories will need to be manually migrated to the new FAISS implementation. The simplest approach is:
+
+1. Use the `search` method to retrieve all memories from each namespace in ChromaDB
+2. Use the `add` method to add them to the new FAISS implementation
+3. Verify that all memories have been transferred correctly
+
 ## Troubleshooting
 
 Common issues and solutions:
 
 1. **Missing Dependencies**:
    ```
-   Error: No module named 'chromadb'
+   Error: No module named 'faiss'
    ```
-   Solution: Install required dependencies with `pip install chromadb sentence-transformers`
+   Solution: Install required dependencies with `pip install faiss-cpu`
 
 2. **Fallback Mode Active**:
    ```
    INFO - engram.memory - Using fallback file-based memory implementation
    ```
-   Solution: Ensure ChromaDB is installed and `ENGRAM_USE_FALLBACK` is not set
+   Solution: Ensure FAISS is installed and `ENGRAM_USE_FALLBACK` is not set
 
 3. **Performance Issues**:
-   - If searches are slow, check if you're running on CPU instead of GPU
-   - For large collections, consider optimizing database parameters
+   - If searches are slow, consider using GPU acceleration with `faiss-gpu`
+   - For large collections, consider optimizing index parameters
    - Monitor memory usage and index size
 
 ## Future Enhancements
 
 Planned improvements for the vector database integration:
 
-1. Support for additional vector database backends (Milvus, Weaviate, etc.)
-2. Customizable embedding models to balance performance and accuracy
-3. Hybrid search combining vector and keyword search
-4. Improved memory pruning and consolidation strategies
-5. Enhanced telemetry control options
-
-## Telemetry Note
-
-ChromaDB has anonymized telemetry enabled by default. If you wish to disable this, you can set the environment variable:
-
-```bash
-export ANONYMIZED_TELEMETRY=False
-```
-
-This will prevent ChromaDB from sending any telemetry data.
+1. Enhanced embedding quality with optional integration of more sophisticated models
+2. Hybrid search combining vector and keyword search
+3. Improved memory pruning and consolidation strategies
+4. Additional index types for different performance characteristics
 
 ## Related Documentation
 

@@ -24,7 +24,7 @@ requirements = [
 
 # Optional requirements (vector database for memory capabilities)
 extras_require = {
-    "vector": ["qdrant-client>=1.7.0", "sentence-transformers>=2.2.2"],
+    "vector": ["faiss-cpu>=1.7.4"],
 }
 
 setup(
