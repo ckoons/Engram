@@ -10,6 +10,7 @@ import sys
 import argparse
 import json
 import asyncio
+import re
 from typing import List, Dict, Any, Optional
 import requests
 
@@ -37,6 +38,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-p", type=float, help="Top-p sampling", default=0.9)
     parser.add_argument("--max-tokens", type=int, help="Maximum tokens to generate", default=2048)
     parser.add_argument("--client-id", type=str, help="Engram client ID", default="ollama")
+    parser.add_argument("--memory-functions", action="store_true", 
+                        help="Enable memory function detection in model responses")
     return parser.parse_args()
 
 def call_ollama_api(model: str, messages: List[Dict[str, str]], 
@@ -97,6 +100,107 @@ class MemoryHandler:
         except Exception as e:
             print(f"Error searching memories: {e}")
             return []
+            
+    @staticmethod
+    def get_context_memories(context: str, max_memories: int = 5):
+        """Get memories relevant to a specific context."""
+        try:
+            return run(c(context, max_memories))
+        except Exception as e:
+            print(f"Error retrieving context memories: {e}")
+            return []
+    
+    @staticmethod
+    def get_semantic_memories(query: str, max_memories: int = 5):
+        """Get semantically similar memories using vector search."""
+        try:
+            return run(v(query, max_memories))
+        except Exception as e:
+            print(f"Error retrieving semantic memories: {e}")
+            return []
+            
+    @staticmethod
+    def detect_memory_operations(model_output: str):
+        """Detect and execute memory operations in model output.
+        
+        Returns:
+            tuple: (cleaned_output, operation_results)
+        """
+        operation_results = []
+        cleaned_output = model_output
+        
+        # Define patterns for memory operations
+        memory_patterns = [
+            (r"REMEMBER:\s*(.+?)(?=\n|$)", "store", MemoryHandler.store_memory),
+            (r"SEARCH:\s*(.+?)(?=\n|$)", "search", MemoryHandler.search_memories),
+            (r"RETRIEVE:\s*(\d+)(?=\n|$)", "retrieve", lambda n: MemoryHandler.get_recent_memories(int(n))),
+            (r"CONTEXT:\s*(.+?)(?=\n|$)", "context", MemoryHandler.get_context_memories),
+            (r"SEMANTIC:\s*(.+?)(?=\n|$)", "semantic", MemoryHandler.get_semantic_memories),
+        ]
+        
+        # Check for patterns and execute corresponding functions
+        for pattern, op_type, func in memory_patterns:
+            matches = re.findall(pattern, model_output)
+            for match in matches:
+                try:
+                    result = func(match)
+                    operation_results.append({
+                        "type": op_type,
+                        "input": match,
+                        "result": result
+                    })
+                    # Remove the operation from the output
+                    cleaned_output = re.sub(pattern, "", cleaned_output, count=1)
+                except Exception as e:
+                    print(f"Error executing memory operation: {e}")
+        
+        return cleaned_output.strip(), operation_results
+    
+    @staticmethod
+    def enhance_prompt_with_memory(user_input: str):
+        """Enhance user prompt with relevant memories."""
+        if not MEMORY_AVAILABLE:
+            return user_input
+            
+        # Check if input is likely to benefit from memory augmentation
+        memory_triggers = [
+            "remember", "recall", "previous", "last time", "you told me", 
+            "earlier", "before", "you mentioned", "what do you know about"
+        ]
+        
+        should_augment = any(trigger in user_input.lower() for trigger in memory_triggers)
+        
+        if should_augment:
+            # Extract potential search terms
+            search_term = user_input
+            if "about" in user_input.lower():
+                search_term = user_input.lower().split("about")[-1].strip()
+            elif "know" in user_input.lower():
+                search_term = user_input.lower().split("know")[-1].strip()
+                
+            # Try semantic search first if available
+            try:
+                memories = MemoryHandler.get_semantic_memories(search_term)
+            except:
+                memories = []
+            
+            # Fall back to keyword search if needed
+            if not memories:
+                memories = MemoryHandler.search_memories(search_term)
+            
+            # Format memories for context
+            if memories:
+                memory_context = "Here are some relevant memories that might help with your response:\n"
+                for memory in memories[:3]:  # Limit to 3 most relevant memories
+                    content = memory.get("content", "")
+                    if content:
+                        memory_context += f"- {content}\n"
+                
+                # Create enhanced prompt
+                enhanced_prompt = f"{memory_context}\n\nUser: {user_input}"
+                return enhanced_prompt
+        
+        return user_input
 
 def main():
     """Main function for the Ollama bridge."""
@@ -107,6 +211,20 @@ def main():
     
     # Create memory handler
     memory = MemoryHandler()
+    
+    # Set up memory functions system prompt if requested
+    if args.memory_functions and not args.system:
+        args.system = """You have access to a memory system that can store and retrieve information.
+To use this system, include special commands in your responses:
+
+- To store information: REMEMBER: {information to remember}
+- To search for information: SEARCH: {search term}
+- To retrieve recent memories: RETRIEVE: {number of memories}
+- To get context-relevant memories: CONTEXT: {context description}
+- To find semantically similar memories: SEMANTIC: {query}
+
+Your memory commands will be processed automatically. Be sure to format your memory commands exactly as shown.
+Always place memory commands on their own line to ensure they are processed correctly."""
     
     # Check if Ollama is running
     try:
@@ -229,37 +347,66 @@ def main():
                 print("Memory functions not available.")
             continue
         
-        # Add user message to chat history
-        chat_history.append({"role": "user", "content": user_input})
-        
-        # Call Ollama API
-        response = call_ollama_api(
-            model=args.model,
-            messages=chat_history,
-            system=args.system,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            max_tokens=args.max_tokens
-        )
-        
-        if "error" in response:
-            print(f"Error: {response['error']}")
-            continue
-        
-        # Get assistant response
-        assistant_message = response.get("message", {}).get("content", "")
-        if assistant_message:
-            print(f"\n{args.model}: {assistant_message}")
-            
-            # Add assistant message to chat history
-            chat_history.append({"role": "assistant", "content": assistant_message})
-            
-            # Automatically save significant interactions to memory
-            if MEMORY_AVAILABLE and len(user_input) > 20 and len(assistant_message) > 50:
-                memory_text = f"User asked: '{user_input}' and {args.model} responded: '{assistant_message[:100]}...'"
-                memory.store_memory(memory_text)
+        # Add user message to chat history, optionally enhancing with memory
+    if MEMORY_AVAILABLE and args.memory_functions:
+        # If using memory functions, enhance with memory
+        enhanced_input = memory.enhance_prompt_with_memory(user_input)
+        if enhanced_input != user_input:
+            print("\n[Memory system: Enhancing prompt with relevant memories]")
+            chat_history.append({"role": "user", "content": enhanced_input})
         else:
-            print("Error: No response from model")
+            chat_history.append({"role": "user", "content": user_input})
+    else:
+        chat_history.append({"role": "user", "content": user_input})
+    
+    # Call Ollama API
+    response = call_ollama_api(
+        model=args.model,
+        messages=chat_history,
+        system=args.system,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        max_tokens=args.max_tokens
+    )
+    
+    if "error" in response:
+        print(f"Error: {response['error']}")
+        continue
+    
+    # Get assistant response
+    assistant_message = response.get("message", {}).get("content", "")
+    if assistant_message:
+        # Check for memory operations in response if memory functions are enabled
+        if MEMORY_AVAILABLE and args.memory_functions:
+            cleaned_message, memory_ops = memory.detect_memory_operations(assistant_message)
+            if memory_ops:
+                print("\n[Memory system: Detected memory operations]")
+                for op in memory_ops:
+                    op_type = op.get("type", "")
+                    op_input = op.get("input", "")
+                    if op_type == "store":
+                        print(f"[Memory system: Remembered '{op_input}']")
+                    elif op_type in ["search", "retrieve", "context", "semantic"]:
+                        print(f"[Memory system: {op_type.capitalize()} results for '{op_input}']")
+                        results = op.get("result", [])
+                        for i, result in enumerate(results[:3]):
+                            content = result.get("content", "")
+                            if content:
+                                print(f"  {i+1}. {content[:80]}...")
+                # Use the cleaned message for display and history
+                assistant_message = cleaned_message
+                
+        print(f"\n{args.model}: {assistant_message}")
+        
+        # Add assistant message to chat history
+        chat_history.append({"role": "assistant", "content": assistant_message})
+        
+        # Automatically save significant interactions to memory
+        if MEMORY_AVAILABLE and len(user_input) > 20 and len(assistant_message) > 50:
+            memory_text = f"User asked: '{user_input}' and {args.model} responded: '{assistant_message[:100]}...'"
+            memory.store_memory(memory_text)
+    else:
+        print("Error: No response from model")
 
 if __name__ == "__main__":
     main()

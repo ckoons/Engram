@@ -6,6 +6,7 @@
 # Parse command line arguments
 CLIENT_ID="ollama"
 MEMORY_ONLY=false
+MEMORY_FUNCTIONS=false
 MODEL_NAME="llama3:8b"  # Default model is llama3:8b
 
 # Parse command line arguments
@@ -19,12 +20,17 @@ while [[ $# -gt 0 ]]; do
       MEMORY_ONLY=true
       shift
       ;;
+    --memory-functions)
+      MEMORY_FUNCTIONS=true
+      shift
+      ;;
     --help)
       echo "Usage: engram_with_ollama [OPTIONS] [MODEL_NAME]"
       echo ""
       echo "Options:"
       echo "  --client-id NAME    Set a specific client ID (default: ollama)"
       echo "  --memory-only       Only start the memory service, don't launch Ollama"
+      echo "  --memory-functions  Enable memory function detection in model responses"
       echo "  --help              Show this help message"
       echo ""
       echo "MODEL_NAME:"
@@ -33,9 +39,10 @@ while [[ $# -gt 0 ]]; do
       echo "Examples:"
       echo "  engram_with_ollama                       # Launch with default model"
       echo "  engram_with_ollama llama3:70b            # Launch with llama3:70b model"
-      echo "  engram_with_ollama mistral              # Launch with mistral model"
+      echo "  engram_with_ollama mistral               # Launch with mistral model"
       echo "  engram_with_ollama --client-id ollama2   # Launch with client ID 'ollama2'"
       echo "  engram_with_ollama --memory-only         # Only start memory service without Ollama"
+      echo "  engram_with_ollama --memory-functions    # Enable model to use REMEMBER:, SEARCH: commands"
       exit 0
       ;;
     *)
@@ -716,6 +723,13 @@ fi
 
 # Launch Ollama bridge
 echo -e "${BLUE}${BOLD}Launching Ollama with model $MODEL_NAME (Client: $CLIENT_ID) and Engram memory...${RESET}"
-python "$OLLAMA_BRIDGE_PATH" --client-id "$CLIENT_ID" "$MODEL_NAME"
+
+# Add memory functions flag if enabled
+if [ "$MEMORY_FUNCTIONS" = true ]; then
+  echo -e "${BLUE}Memory functions are enabled. Model can use REMEMBER:, SEARCH:, etc. commands${RESET}"
+  python "$OLLAMA_BRIDGE_PATH" --client-id "$CLIENT_ID" --memory-functions "$MODEL_NAME"
+else
+  python "$OLLAMA_BRIDGE_PATH" --client-id "$CLIENT_ID" "$MODEL_NAME"
+fi
 
 echo -e "${BLUE}${BOLD}====== Ollama session ended ======${RESET}"
