@@ -108,6 +108,136 @@ The integration uses the following memory functions from `engram.cli.quickmem`:
 - `t(content, tags)`: Store a tagged memory
 - `s()`: Get memory service status
 
+## Enhancing Ollama Models with Memory Capabilities
+
+Since most Ollama models lack direct tool-calling abilities, here are several approaches to enhance their integration with Engram:
+
+### 1. Structured Prompt System
+
+Implement a structured prompt system that inserts memory information directly into the context:
+
+```python
+def enhance_prompt_with_memory(user_input, model_name, memory_handler):
+    """Enhance user prompt with relevant memories."""
+    
+    # Check if input requires memory augmentation
+    if "remember" in user_input.lower() or "what do you know about" in user_input.lower():
+        # Search for relevant memories
+        search_term = user_input.split("about")[-1].strip() if "about" in user_input else user_input
+        memories = memory_handler.search_memories(search_term)
+        
+        # Format memories for context
+        memory_context = "Here are some relevant memories I have:\n"
+        for memory in memories[:3]:  # Limit to 3 most relevant memories
+            memory_context += f"- {memory.get('content', '')}\n"
+        
+        # Create enhanced prompt
+        enhanced_prompt = f"{memory_context}\n\nUser: {user_input}"
+        return enhanced_prompt
+    
+    return user_input
+```
+
+### 2. Function Calling Emulation
+
+Create a function calling emulation layer that detects potential function calls in model outputs:
+
+```python
+def detect_memory_operations(model_output, memory_handler):
+    """Detect and execute potential memory operations in model output."""
+    
+    # Patterns for memory operations
+    memory_patterns = [
+        (r"REMEMBER:\s*(.+)", memory_handler.store_memory),
+        (r"SEARCH:\s*(.+)", memory_handler.search_memories),
+        (r"RETRIEVE:\s*(\d+)", lambda n: memory_handler.get_recent_memories(int(n))),
+    ]
+    
+    # Check for patterns and execute corresponding functions
+    for pattern, func in memory_patterns:
+        matches = re.findall(pattern, model_output)
+        for match in matches:
+            func(match)
+    
+    # Clean up the response by removing function call syntax
+    for pattern, _ in memory_patterns:
+        model_output = re.sub(pattern, "", model_output)
+    
+    return model_output.strip()
+```
+
+### 3. System Prompt Design
+
+Provide clear instructions in the system prompt to guide the model to use a specific format for memory operations:
+
+```
+System: You have access to a memory system that can store and retrieve information. 
+To use this system, include special commands in your responses:
+
+- To store information: REMEMBER: {information to remember}
+- To search for information: SEARCH: {search term}
+- To retrieve recent memories: RETRIEVE: {number of memories}
+
+Your memory commands will be processed automatically, and the output will be fed back
+to you in the next user message. Be sure to format your memory commands exactly as shown.
+```
+
+### 4. Automated Semantic Memory Operations
+
+Implement automatic semantic memory operations based on conversation context:
+
+```python
+def auto_memory_management(user_input, model_output, client_id, memory_handler):
+    """Automatically handle memory operations based on conversation."""
+    
+    # Store significant exchanges
+    if len(user_input) > 20 and len(model_output) > 50:
+        memory_text = f"User asked about {user_input[:50]}... and {client_id} responded with information about {model_output[:50]}..."
+        memory_handler.store_memory(memory_text)
+    
+    # Detect potential information worth remembering
+    if "important to remember" in model_output.lower() or "don't forget" in model_output.lower():
+        sentences = re.split(r'[.!?]', model_output)
+        for sentence in sentences:
+            if "important" in sentence.lower() or "remember" in sentence.lower() or "key point" in sentence.lower():
+                memory_handler.store_memory(sentence.strip())
+    
+    # Automatic context enrichment for next exchange
+    related_memories = memory_handler.search_memories(user_input)
+    return related_memories
+```
+
+### 5. Hybrid Architecture
+
+Create a hybrid architecture where Claude acts as a memory manager for Ollama models:
+
+```python
+def hybrid_memory_architecture(user_input, ollama_model, claude_endpoint, memory_handler):
+    """Use Claude as a memory manager for Ollama models."""
+    
+    # First, get relevant memories using Claude's capabilities
+    claude_prompt = f"The user is asking Ollama: '{user_input}'. Retrieve relevant memories that would help answer this question effectively. Format as bullet points."
+    claude_response = call_claude_api(claude_endpoint, claude_prompt)
+    
+    # Extract memory suggestions
+    memory_suggestions = parse_claude_response(claude_response)
+    
+    # Augment Ollama prompt with Claude-selected memories
+    augmented_prompt = f"Here is relevant background information:\n{memory_suggestions}\n\nUser: {user_input}"
+    
+    # Get Ollama response with augmented context
+    ollama_response = call_ollama_api(ollama_model, augmented_prompt)
+    
+    # Use Claude to determine what to remember from this exchange
+    memory_prompt = f"User asked: '{user_input}'\nOllama responded: '{ollama_response}'\nWhat information from this exchange should be remembered for future reference? Format as a concise statement."
+    memory_suggestion = call_claude_api(claude_endpoint, memory_prompt)
+    
+    # Store the memory
+    memory_handler.store_memory(memory_suggestion)
+    
+    return ollama_response
+```
+
 ## Troubleshooting
 
 ### Common Issues
