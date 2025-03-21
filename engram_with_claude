@@ -252,8 +252,8 @@ start_engram_services() {
             echo -e "${RED}Engram service process started but terminated immediately${RESET}"
             echo -e "${YELLOW}Error output:${RESET}"
             if [ -f "$ERROR_LOG" ]; then
-                # First, check for NumPy-related errors
-                if grep -q "numpy" "$ERROR_LOG" || grep -q "sentence_transformers" "$ERROR_LOG" || grep -q "qdrant" "$ERROR_LOG"; then
+                # First, check for FAISS-related errors
+                if grep -q "faiss" "$ERROR_LOG" || grep -q "vector_store" "$ERROR_LOG" || grep -q "numpy" "$ERROR_LOG"; then
                     echo -e "${RED}Vector database dependency issue detected${RESET}"
                     echo -e "${YELLOW}To fix vector database integration, run:${RESET}"
                     echo -e "${GREEN}cd $ENGRAM_DIR && python vector_db_setup.py --install${RESET}"
@@ -345,12 +345,8 @@ fi
 VECTOR_DB_AVAILABLE=true
 echo -e "${BLUE}Checking for vector database dependencies...${RESET}"
 
-if ! python -c "import chromadb" >/dev/null 2>&1; then
-    echo -e "${YELLOW}Package chromadb is not installed - vector search will not be available${RESET}"
-    VECTOR_DB_AVAILABLE=false
-    export ENGRAM_USE_FALLBACK=1
-elif ! python -c "import sentence_transformers" >/dev/null 2>&1; then
-    echo -e "${YELLOW}Package sentence_transformers is not installed - vector search will not be available${RESET}"
+if ! python -c "import faiss" >/dev/null 2>&1; then
+    echo -e "${YELLOW}Package faiss is not installed - vector search will not be available${RESET}"
     VECTOR_DB_AVAILABLE=false
     export ENGRAM_USE_FALLBACK=1
 else
@@ -358,14 +354,8 @@ else
     # Ensure we're not using fallback mode
     export ENGRAM_USE_FALLBACK=0
     
-    # Double-check version compatibility
-    if ! python -c "import numpy; major=int(numpy.__version__.split('.')[0]); assert major < 2, 'NumPy 2.x detected'" >/dev/null 2>&1; then
-        echo -e "${YELLOW}NumPy version 2.x detected, which may be incompatible with sentence_transformers${RESET}"
-        echo -e "${YELLOW}For full vector search capability, you might need to downgrade NumPy:${RESET}"
-        echo -e "${YELLOW}   pip install numpy<2.0.0${RESET}"
-        echo -e "${YELLOW}Alternatively, run:${RESET}"
-        echo -e "${YELLOW}   python $ENGRAM_DIR/vector_db_setup.py --install${RESET}"
-    fi
+    # Note: FAISS works with NumPy 2.x, so no version check needed
+    echo -e "${GREEN}FAISS vector database is compatible with all NumPy versions${RESET}"
 fi
 
 # Check if services are running
