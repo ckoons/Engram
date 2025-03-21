@@ -69,6 +69,13 @@ Engram provides AI systems with the ability to maintain memory traces across dif
   - Supports Claude's growth and learning over time
   - Creates a shared context between human and AI
   
+- **Multi-Model Support**:
+  - Compatible with multiple AI models (Claude, Ollama)
+  - Standardized memory interface across different models
+  - Model-specific optimizations while maintaining compatibility
+  - Automatic client ID handling for each model
+  - Shared context between different AI models
+
 - **Claude-to-Claude Communication**:
   - Multiple Claude instances can communicate with each other
   - Mode detection adapts to different Claude operational modes
@@ -77,20 +84,45 @@ Engram provides AI systems with the ability to maintain memory traces across dif
   - Context spaces for collaborative work between Claude instances
   - Human orchestration of multiple specialized Claude instances
 
+- **Ollama Integration**:
+  - Support for local LLM models via Ollama
+  - Compatible with all Ollama models (Llama, Mistral, etc.)
+  - Memory bridge for Ollama model chat sessions
+  - Persistent memory across different Ollama sessions
+  - Easy model selection and configuration
+
 ## Quick Start
 
-### Option 1: Automatic Memory Loading (Recommended)
+### Option 1: Unified Launcher with Multi-Model Support (Recommended)
 
 ```bash
-# Launch Claude with all memory services pre-configured
-./claude_with_memory
+# Launch with Claude (default) and memory services pre-configured
+./engram_launcher
 
-# OR use the simplified starter in Claude Code session
-from claude_memory_start import start_memory
-start_memory("Project Work Session")  # Loads memories and starts session
+# Launch with Ollama and memory services pre-configured
+./engram_launcher --ollama
+
+# Specify a specific Ollama model
+./engram_launcher --ollama llama3:70b
+
+# Get help on launcher options
+./engram_launcher --help
 ```
 
-### Option 2: Using the Consolidated Server (Single Port)
+### Option 2: Model-specific Launch Scripts
+
+```bash
+# Launch Claude with memory services
+./engram_with_claude
+
+# Launch Ollama with memory services (defaults to llama3:8b)
+./engram_with_ollama
+
+# Launch Ollama with a specific model
+./engram_with_ollama mistral
+```
+
+### Option 3: Using the Consolidated Server (Single Port)
 
 ```bash
 # Start the consolidated server (combines memory and HTTP on a single port)
@@ -99,17 +131,17 @@ start_memory("Project Work Session")  # Loads memories and starts session
 # OR use the engram_check script which now uses the consolidated server
 ./engram_check.py --start
 
-# In your Claude session, access memories with QuickMem:
+# In your AI session, access memories with QuickMem:
 from engram.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
 ```
 
-### Option 3: Legacy Mode (Separate Services)
+### Option 4: Legacy Mode (Separate Services)
 
 ```bash
 # Start memory service and HTTP services separately
 ./engram_start_all
 
-# In your Claude session, access memories with QuickMem:
+# In your AI session, access memories with QuickMem:
 from engram.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
 
 # Auto-load previous memories and start session in one command
@@ -231,6 +263,12 @@ pip install -r requirements.txt
 # Or install the package
 pip install -e .
 
+# For vector database support (optional but recommended)
+python vector_db_setup.py --install
+
+# For Ollama support (optional)
+# Install Ollama from https://ollama.ai
+
 # Start everything (interactive mode)
 ./engram_start_web
 
@@ -240,6 +278,9 @@ python -m cmb.web.app  # Web UI only (requires memory service)
 
 # Launch Claude with memory services and full tool access
 ./engram_with_claude   # All-in-one script for Claude Code with memory
+
+# Launch Ollama with memory services
+./engram_with_ollama   # All-in-one script for Ollama with memory
 ```
 
 ## Documentation
@@ -257,6 +298,7 @@ python -m cmb.web.app  # Web UI only (requires memory service)
 - [Memory Visualization](docs/memory_visualization.md): Web-based UI for browsing and managing memories
 - [Simplified Web UI](docs/simplified_web_ui.md): Lightweight alternative for environments with dependency issues
 - [Claude Integration](docs/claude_integration.md): Automatic startup and memory status checking for Claude sessions
+- [Ollama Integration](docs/ollama_integration.md): Using memory with local LLM models via Ollama
 - [Multi-Claude Communication](docs/multi_claude_usage.md): Using multiple Claude instances for collaboration
 - [Behavioral Divergence](docs/anthropic_claude_meeting_claude.md): Research on behavioral divergence between Claude instances
 - [Future Enhancements](docs/future_enhancements.md): Planned features and improvements
