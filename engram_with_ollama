@@ -4,29 +4,12 @@
 # Get the directory where the real Engram files are located
 ENGRAM_DIR="/Users/cskoons/projects/github/Engram"
 
-# Check for NumPy compatibility issues and offer the direct FAISS solution
-if [ -f "FAISS_DIRECT.md" ]; then
-    # Check if NumPy version is 2.x
-    NUMPY_VER=$(python -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "not-installed")
-    if [[ "$NUMPY_VER" == 2.* ]]; then
-        echo "⚠️  NumPy 2.x detected: $NUMPY_VER"
-        echo "This version causes compatibility issues with ChromaDB."
-        echo ""
-        echo "Recommended solution:"
-        echo "Use our direct FAISS launcher which works with NumPy 2.x:"
-        echo "./engram_with_ollama_direct"
-        echo ""
-        echo "See FAISS_DIRECT.md for details."
-        echo ""
-        read -p "Continue with current script anyway? This will use file-based memory instead of vector search. (y/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
-        fi
-        echo "Continuing with ENGRAM_USE_FALLBACK=1 (file-based memory)..."
-        export ENGRAM_USE_FALLBACK=1
-    fi
-fi
+# Engram now uses FAISS by default, so no NumPy compatibility check needed
+# This script uses file-based memory (fallback mode) for simplicity
+# For vector search with FAISS, use ./engram_with_ollama_faiss
+
+# Set fallback mode (file-based memory)
+export ENGRAM_USE_FALLBACK=1
 
 # Default values
 MODEL="llama3:8b"
@@ -97,8 +80,6 @@ CURRENT_DIR="$(pwd)"
 
 # Skip starting the Engram memory service - will use file-based approach
 echo "Using file-based memory system (no server required)"
-# Set environment variable to force fallback memory use
-export ENGRAM_USE_FALLBACK=1
 
 # Check if Ollama is running
 if ! curl -s http://localhost:11434/api/tags > /dev/null; then
@@ -138,8 +119,7 @@ echo ""
 echo "Type 'exit' or '/quit' to exit"
 echo ""
 
-# Force the use of fallback file-based memory (no vector DB)
-export ENGRAM_USE_FALLBACK=1
+# Use fallback file-based memory (already set at top of script)
 
 # Execute the command from the current directory
 # This ensures the bridge sees the files in the user's current directory
