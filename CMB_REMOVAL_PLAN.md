@@ -1,126 +1,77 @@
-# CMB Directory Removal Plan
+# CMB Removal Plan
 
-This document outlines the plan for removing the legacy `cmb` (Claude Memory Bridge) directory in favor of the consolidated `engram` package. The `cmb` package is now redundant, as all functionality has been migrated to the `engram` package.
+This document outlines the strategy for removing the redundant `cmb` (Claude Memory Bridge) package and fully migrating to the `engram` package structure.
 
-## Background
+## Phase 1: Compatibility Layer (COMPLETED)
 
-The `cmb` directory was originally created as the primary package for the Claude Memory Bridge system. Over time, functionality was migrated to the `engram` package, and the `cmb` package was maintained only for backward compatibility.
+- ✅ Create `cmb_compat.py` module for import compatibility
+- ✅ Update engram package to provide all functionality from cmb
+- ✅ Map all cmb imports to their engram counterparts
 
-Now that the FAISS migration is complete and the system has been consolidated, it's time to remove the redundant code to simplify maintenance.
+## Phase 2: Update References (CURRENT PHASE)
 
-## Files to Remove
+1. Update all Python script imports:
+   - Remove direct imports from `cmb.*` modules
+   - Replace with equivalent `engram.*` imports
+   - Apply to all application code, tests, and examples
 
-The following directories and files will be removed:
+2. Update shell scripts:
+   - Replace any references to `cmb` in shell scripts
+   - Update environment variable references (CMB_* to ENGRAM_*)
+   - Ensure all launcher scripts reference engram modules
 
-```
-cmb/
-├── __init__.py
-├── api/
-│   ├── __init__.py
-│   ├── consolidated_server.py
-│   ├── http_wrapper.py
-│   └── server.py
-├── cli/
-│   ├── __init__.py
-│   ├── claude_helper.py
-│   ├── claude_launcher.py
-│   ├── comm_quickmem.py
-│   ├── http_helper.py
-│   └── quickmem.py
-├── core/
-│   ├── __init__.py
-│   ├── async_protocol.py
-│   ├── behavior_logger.py
-│   ├── claude_comm.py
-│   ├── crypto.py
-│   ├── memory.py
-│   ├── mode_detection.py
-│   ├── nexus.py
-│   ├── orchestrator.py
-│   ├── report_generator.py
-│   └── structured_memory.py
-└── web/
-    ├── __init__.py
-    └── app.py
-```
+3. Update documentation:
+   - Replace cmb references in all markdown files
+   - Update code examples to use engram imports
+   - Create migration guide for users
 
-## Migration Strategy
+## Phase 3: Remove CMB Package
 
-1. **Create Import Redirection Package**:
-   - Create a standalone package called `cmb_compat` with import redirection
-   - Users can install this separately if they need backward compatibility
+1. Verify all functionality:
+   - Run all tests with engram-only imports
+   - Manually test all scripts and tools
+   - Ensure no functional regressions
 
-2. **Create Migration Documentation**:
-   - Document the migration path in a clear guide
-   - Provide import substitution examples
+2. Remove cmb package:
+   - Delete cmb directory entirely
+   - Keep cmb_compat.py for transitional support
 
-3. **Update Scripts**:
-   - Update all scripts to use `engram` module imports
-   - Add fallback imports for compatibility
+3. Finalize documentation:
+   - Remove any lingering cmb references
+   - Update README with current status
+   - Close any migration-related issues
 
-4. **Package Changes**:
-   - Update `setup.py` to remove `cmb` package
-   - Add note about the separation
+## Phase 4: Clean-up (FUTURE)
 
-## Import Mapping
+1. Release new version:
+   - Create a new release with cmb removal
+   - Update version numbers
 
-Here's the mapping from old `cmb` imports to new `engram` imports:
+2. Deprecate compatibility layer:
+   - Add future deprecation notice to cmb_compat.py
+   - Plan for eventual removal in future release (6+ months)
 
-| Old Import | New Import |
-|------------|------------|
-| `from cmb.core.memory import MemoryService` | `from engram.core.memory_faiss import MemoryService` |
-| `from cmb.core.structured_memory import StructuredMemory` | `from engram.core.structured_memory import StructuredMemory` |
-| `from cmb.core.nexus import NexusInterface` | `from engram.core.nexus import NexusInterface` |
-| `from cmb.api.consolidated_server import start_server` | `from engram.api.consolidated_server import start_server` |
-| `from cmb.cli.quickmem import *` | `from engram.cli.quickmem import *` |
-| `from cmb.web.app import app` | `from engram.web.app import app` |
+## File Update Checklist
 
-## Timeline
+### Python Scripts
+- [ ] `/Users/cskoons/projects/github/Engram/tests/test_http_wrapper.py`
+- [ ] `/Users/cskoons/projects/github/Engram/tests/test_structured_memory.py`
+- [ ] `/Users/cskoons/projects/github/Engram/tests/test_quickmem.py`
+- [ ] `/Users/cskoons/projects/github/Engram/tests/test_memory.py`
+- [ ] `/Users/cskoons/projects/github/Engram/simple_web_ui.py`
+- [ ] `/Users/cskoons/projects/github/Engram/examples/consolidated_example.py`
 
-1. **Phase 1** - Preparation (Current):
-   - Document all import paths that need to change
-   - Create compatibility layer (if needed)
-   - Update all existing scripts
+### Shell Scripts
+- [ ] `/Users/cskoons/projects/github/Engram/claude_comm_test.sh`
+- [ ] `/Users/cskoons/projects/github/Engram/launch_claude.sh`
+- [ ] `/Users/cskoons/projects/github/Engram/install.sh`
 
-2. **Phase 2** - Soft Removal:
-   - Mark `cmb` as deprecated in documentation
-   - Create warning in `cmb/__init__.py` that directs users to use `engram`
-   - Keep the package for 1-2 more versions
-
-3. **Phase 3** - Hard Removal:
-   - Remove `cmb` package completely
-   - Update all documentation to reference only `engram`
-
-## Migration Guide for Users
-
-### For Simple Use Cases
-
-```python
-# Old import
-from cmb.core.memory import MemoryService
-from cmb.cli.quickmem import memory_digest, start_nexus
-
-# New import
-from engram.core.memory_faiss import MemoryService
-from engram.cli.quickmem import memory_digest, start_nexus
-```
-
-### For Comprehensive Migration
-
-Replace all imports from `cmb.*` to `engram.*` with the same subpath.
-
-### For Running Scripts
-
-Update any script invocations:
-
-```bash
-# Old approach
-python -m cmb.api.server
-
-# New approach
-python -m engram.api.server
-```
-
-## Conclusion
-
-Removing the redundant `cmb` package will simplify the codebase, reduce maintenance overhead, and provide a clearer API for users. The migration path is straightforward, as the `engram` package has maintained API compatibility with the `cmb` package.
+### Environment Variables
+Update the following:
+- CMB_CLIENT_ID → ENGRAM_CLIENT_ID
+- CMB_DATA_DIR → ENGRAM_DATA_DIR
+- CMB_BASE_URL → ENGRAM_BASE_URL
+- CMB_HTTP_URL → ENGRAM_HTTP_URL
+- CMB_WEB_HOST → ENGRAM_WEB_HOST
+- CMB_WEB_PORT → ENGRAM_WEB_PORT
+- CMB_WEB_DEBUG → ENGRAM_WEB_DEBUG

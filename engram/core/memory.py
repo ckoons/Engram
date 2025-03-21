@@ -38,25 +38,25 @@ if USE_FALLBACK:
     logger.info("Using file-based memory implementation (no vector search)")
     HAS_VECTOR_DB = False
 else:
-    # Import ChromaDB for vector-based memory
+    # Import FAISS for vector-based memory
     try:
-        import chromadb
-        from sentence_transformers import SentenceTransformer
+        import faiss
+        from engram.core.vector_store import VectorStore, SimpleEmbedding
         
         HAS_VECTOR_DB = True
-        VECTOR_DB_NAME = "chromadb"
+        VECTOR_DB_NAME = "faiss"
         
         # Get version if available
         try:
-            VECTOR_DB_VERSION = chromadb.__version__
+            VECTOR_DB_VERSION = faiss.__version__
         except AttributeError:
             VECTOR_DB_VERSION = "unknown"
         
         logger.info(f"Vector storage library found: {VECTOR_DB_NAME} {VECTOR_DB_VERSION}")
-        logger.info("Using vector-based memory implementation with ChromaDB")
+        logger.info("Using vector-based memory implementation with FAISS")
     except ImportError:
         HAS_VECTOR_DB = False
-        logger.warning("ChromaDB not found, using fallback file-based implementation")
+        logger.warning("FAISS not found, using fallback file-based implementation")
         logger.info("Memory will still work but without vector search capabilities")
 
 class MemoryService:

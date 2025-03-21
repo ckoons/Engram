@@ -12,7 +12,7 @@ RESET="\033[0m"
 
 # Check if memory service is running
 echo -e "${BLUE}${BOLD}Checking memory service...${RESET}"
-if ps aux | grep -q "cmb.api.consolidated_server"; then
+if ps aux | grep -q "engram.api.consolidated_server"; then
     echo -e "${GREEN}Memory service is already running.${RESET}"
 else
     echo -e "${YELLOW}Starting memory service...${RESET}"
@@ -26,7 +26,7 @@ launch_claude() {
     
     # Open a new terminal window with Claude
     osascript -e "tell application \"Terminal\" 
-        do script \"cd $(pwd) && export CMB_CLIENT_ID=${client_id} && export CMB_DATA_DIR=$HOME/.engram && echo -e \\\"${GREEN}${BOLD}Claude Instance: ${client_id}${RESET}\\\" && python test_multi_claude.py\"
+        do script \"cd $(pwd) && export ENGRAM_CLIENT_ID=${client_id} && export ENGRAM_DATA_DIR=$HOME/.engram && echo -e \\\"${GREEN}${BOLD}Claude Instance: ${client_id}${RESET}\\\" && python test_multi_claude.py\"
     end tell"
     
     echo -e "${GREEN}Claude instance ${client_id} launched successfully!${RESET}"

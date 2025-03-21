@@ -12,8 +12,8 @@ CLIENT_ID="$1"
 echo "Launching Claude with client ID: $CLIENT_ID"
 
 # Set environment variables
-export CMB_CLIENT_ID="$CLIENT_ID"
-export CMB_DATA_DIR="$HOME/.engram"
+export ENGRAM_CLIENT_ID="$CLIENT_ID"
+export ENGRAM_DATA_DIR="$HOME/.engram"
 
 # Launch Claude
 claude --allowedTools="Bash(*),Edit,View,Replace,BatchTool,GlobTool,GrepTool,LS,ReadNotebook,NotebookEditCell,WebFetchTool"

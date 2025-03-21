@@ -2,7 +2,7 @@
 """
 Tests for the HTTP Wrapper API
 
-These tests verify the HTTP API endpoints for the Claude Memory Bridge,
+These tests verify the HTTP API endpoints for the Engram Memory system,
 including the enhanced structured memory and Nexus functionality.
 """
 
@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from typing import Dict, List, Any, Optional
 
 # Import the HTTP wrapper
-from cmb.api.http_wrapper import app, startup_event
+from engram.api.http_wrapper import app, startup_event
 
 @pytest.fixture
 def temp_data_dir():
@@ -31,13 +31,13 @@ def temp_data_dir():
 def configured_app(temp_data_dir):
     """Configure the app with a test client ID and data directory."""
     # Set environment variables for the test
-    os.environ["CMB_CLIENT_ID"] = "test_client"
-    os.environ["CMB_DATA_DIR"] = temp_data_dir
+    os.environ["ENGRAM_CLIENT_ID"] = "test_client"
+    os.environ["ENGRAM_DATA_DIR"] = temp_data_dir
     
     # Initialize the services synchronously instead of using the async startup_event
-    from cmb.core.memory import MemoryService
-    from cmb.core.structured_memory import StructuredMemory
-    from cmb.core.nexus import NexusInterface
+    from engram.core.memory_faiss import MemoryService
+    from engram.core.structured_memory import StructuredMemory
+    from engram.core.nexus import NexusInterface
     
     # Update app with test services
     app.memory_service = MemoryService(client_id="test_client", data_dir=temp_data_dir)
@@ -63,7 +63,7 @@ class TestHTTPWrapper:
         """Test the root endpoint."""
         response = test_client.get("/")
         assert response.status_code == 200
-        assert response.json()["message"] == "Claude Memory Bridge HTTP Wrapper"
+        assert response.json()["message"] == "Engram Memory HTTP Wrapper"
     
     def test_health_check(self, test_client):
         """Test the health check endpoint."""

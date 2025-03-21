@@ -2,7 +2,7 @@
 """
 Consolidated Server Example
 
-This example demonstrates how to use the Claude Memory Bridge consolidated server,
+This example demonstrates how to use the Engram Memory consolidated server,
 which combines both the memory service and HTTP wrapper on a single port.
 """
 
@@ -19,7 +19,7 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 
 def get_base_url():
     """Get the base URL for the consolidated server."""
-    return os.environ.get("CMB_BASE_URL", DEFAULT_BASE_URL)
+    return os.environ.get("ENGRAM_BASE_URL", DEFAULT_BASE_URL)
 
 def safe_string(text):
     """Make a string safe for use in URLs."""
@@ -91,7 +91,7 @@ async def use_structured_memory():
     
     # Add a memory with auto-categorization
     try:
-        memory = "This is an important fact about Claude Memory Bridge that should be remembered with high importance."
+        memory = "This is an important fact about Engram Memory that should be remembered with high importance."
         with urllib.request.urlopen(f"{get_base_url()}/structured/auto?content={safe_string(memory)}", timeout=5) as response:
             result = json.loads(response.read().decode())
             print(f"Auto-categorized memory: {result}")
@@ -123,14 +123,14 @@ async def use_nexus_api():
 
 async def main():
     """Run all examples."""
-    print("===== CLAUDE MEMORY BRIDGE CONSOLIDATED SERVER EXAMPLE =====")
+    print("===== ENGRAM MEMORY CONSOLIDATED SERVER EXAMPLE =====")
     print(f"Base URL: {get_base_url()}")
     
     # Check if server is running
     health_data = await health_check()
     if not health_data:
         print("ERROR: The consolidated server is not running or cannot be reached.")
-        print("Please start the server with: ./cmb_consolidated")
+        print("Please start the server with: ./engram_consolidated")
         sys.exit(1)
     
     print(f"Server is running! Client ID: {health_data.get('client_id', 'unknown')}")
@@ -146,11 +146,11 @@ async def main():
     await use_nexus_api()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Claude Memory Bridge Consolidated Server Example")
+    parser = argparse.ArgumentParser(description="Engram Memory Consolidated Server Example")
     parser.add_argument("--url", type=str, help="Base URL for the consolidated server")
     args = parser.parse_args()
     
     if args.url:
-        os.environ["CMB_BASE_URL"] = args.url
+        os.environ["ENGRAM_BASE_URL"] = args.url
     
     asyncio.run(main())

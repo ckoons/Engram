@@ -1,736 +1,146 @@
 #!/bin/bash
-# engram_with_ollama
-# Launch Ollama with Engram memory services
-# Created: March 21, 2025
+# Engram with Ollama - Launcher script for Ollama integration
 
-# Parse command line arguments
+# Get the directory where the real Engram files are located
+ENGRAM_DIR="/Users/cskoons/projects/github/Engram"
+
+# Check for NumPy compatibility issues and offer the direct FAISS solution
+if [ -f "FAISS_DIRECT.md" ]; then
+    # Check if NumPy version is 2.x
+    NUMPY_VER=$(python -c "import numpy; print(numpy.__version__)" 2>/dev/null || echo "not-installed")
+    if [[ "$NUMPY_VER" == 2.* ]]; then
+        echo "⚠️  NumPy 2.x detected: $NUMPY_VER"
+        echo "This version causes compatibility issues with ChromaDB."
+        echo ""
+        echo "Recommended solution:"
+        echo "Use our direct FAISS launcher which works with NumPy 2.x:"
+        echo "./engram_with_ollama_direct"
+        echo ""
+        echo "See FAISS_DIRECT.md for details."
+        echo ""
+        read -p "Continue with current script anyway? This will use file-based memory instead of vector search. (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+        echo "Continuing with ENGRAM_USE_FALLBACK=1 (file-based memory)..."
+        export ENGRAM_USE_FALLBACK=1
+    fi
+fi
+
+# Default values
+MODEL="llama3:8b"
+PROMPT_TYPE="combined"
 CLIENT_ID="ollama"
-MEMORY_ONLY=false
-MEMORY_FUNCTIONS=false
-MODEL_NAME="llama3:8b"  # Default model is llama3:8b
+TEMPERATURE="0.7"
+MAX_TOKENS="2048"
+MEMORY_FUNCTIONS=true
+AVAILABLE_MODELS="Claude"
 
-# Parse command line arguments
+# Parse command-line arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
+    --prompt-type)
+      PROMPT_TYPE="$2"
+      shift 2
+      ;;
     --client-id)
       CLIENT_ID="$2"
       shift 2
       ;;
-    --memory-only)
-      MEMORY_ONLY=true
+    --temperature)
+      TEMPERATURE="$2"
+      shift 2
+      ;;
+    --max-tokens)
+      MAX_TOKENS="$2"
+      shift 2
+      ;;
+    --no-memory)
+      MEMORY_FUNCTIONS=false
       shift
       ;;
-    --memory-functions)
-      MEMORY_FUNCTIONS=true
-      shift
+    --available-models)
+      AVAILABLE_MODELS="$2"
+      shift 2
       ;;
     --help)
-      echo "Usage: engram_with_ollama [OPTIONS] [MODEL_NAME]"
+      echo "Engram with Ollama - Launcher script for Ollama integration"
+      echo ""
+      echo "Usage: engram_with_ollama [options]"
       echo ""
       echo "Options:"
-      echo "  --client-id NAME    Set a specific client ID (default: ollama)"
-      echo "  --memory-only       Only start the memory service, don't launch Ollama"
-      echo "  --memory-functions  Enable memory function detection in model responses"
-      echo "  --help              Show this help message"
-      echo ""
-      echo "MODEL_NAME:"
-      echo "  Optional model name to use (default: llama3:8b)"
-      echo ""
-      echo "Examples:"
-      echo "  engram_with_ollama                       # Launch with default model"
-      echo "  engram_with_ollama llama3:70b            # Launch with llama3:70b model"
-      echo "  engram_with_ollama mistral               # Launch with mistral model"
-      echo "  engram_with_ollama --client-id ollama2   # Launch with client ID 'ollama2'"
-      echo "  engram_with_ollama --memory-only         # Only start memory service without Ollama"
-      echo "  engram_with_ollama --memory-functions    # Enable model to use REMEMBER:, SEARCH: commands"
-      echo "  engram_with_ollama --memory-functions llama3:8b   # Enable model with memory commands"
+      echo "  --model MODEL             Ollama model to use (default: llama3:8b)"
+      echo "  --prompt-type TYPE        System prompt type: memory, communication, combined (default: combined)"
+      echo "  --client-id ID            Client ID for Engram (default: ollama)"
+      echo "  --temperature TEMP        Temperature for generation (default: 0.7)"
+      echo "  --max-tokens TOKENS       Maximum tokens to generate (default: 2048)"
+      echo "  --no-memory               Disable memory functions"
+      echo "  --available-models MODELS Space-separated list of available models (default: Claude)"
+      echo "  --help                    Show this help message"
       exit 0
       ;;
     *)
-      # If first positional argument and doesn't start with --, treat as model name
-      if [[ ! $1 == --* ]]; then
-        MODEL_NAME="$1"
-        shift
-      else
-        echo "Unknown option: $1"
-        echo "Try 'engram_with_ollama --help' for more information."
-        exit 1
-      fi
+      echo "Unknown option: $1"
+      echo "Use --help to see available options"
+      exit 1
       ;;
   esac
 done
 
-# ANSI color codes for terminal output
-BLUE="\033[94m"
-GREEN="\033[92m"
-YELLOW="\033[93m"
-RED="\033[91m"
-BOLD="\033[1m"
-RESET="\033[0m"
+# Store the current working directory to maintain it
+CURRENT_DIR="$(pwd)"
 
-# Find the Engram installation directory
-# First try to find it using pip
-ENGRAM_PKG_DIR=$(python -c "import engram; print(engram.__path__[0])" 2>/dev/null)
-if [ -n "$ENGRAM_PKG_DIR" ]; then
-  # Go up one level from the package directory to get the installation directory
-  ENGRAM_DIR=$(dirname "$ENGRAM_PKG_DIR")
-  echo -e "${GREEN}Found Engram installation via pip at: $ENGRAM_DIR${RESET}"
-else
-  # Fall back to the default location
-  ENGRAM_DIR="$HOME/projects/github/Engram"
-  echo -e "${YELLOW}Using default Engram location: $ENGRAM_DIR${RESET}"
+# Skip starting the Engram memory service - will use file-based approach
+echo "Using file-based memory system (no server required)"
+# Set environment variable to force fallback memory use
+export ENGRAM_USE_FALLBACK=1
+
+# Check if Ollama is running
+if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+  echo "Error: Ollama is not running. Please start Ollama first."
+  exit 1
 fi
 
-# Handle virtual environment in the Engram directory
-VENV_DIR="$ENGRAM_DIR/venv"
-if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/bin/activate" ]; then
-  echo -e "${GREEN}Found virtual environment at: $VENV_DIR${RESET}"
-  source "$VENV_DIR/bin/activate"
-else
-  echo -e "${YELLOW}No Engram virtual environment found, using system Python${RESET}"
-  # Add Engram directory to Python path for direct imports
-  export PYTHONPATH="$ENGRAM_DIR:$PYTHONPATH"
+# Use absolute paths for Ollama bridge script
+OLLAMA_BRIDGE="$ENGRAM_DIR/ollama_bridge.py"
+echo "Using Ollama bridge: $OLLAMA_BRIDGE"
+
+# Verify the bridge file exists
+if [ ! -f "$OLLAMA_BRIDGE" ]; then
+  echo "Error: Ollama bridge script not found at $OLLAMA_BRIDGE"
+  echo "Please check the installation path or reinstall Engram"
+  exit 1
 fi
 
-# Engram paths
-ENGRAM_CHECK="$ENGRAM_DIR/engram_check.py"
-ENGRAM_STARTUP="$ENGRAM_DIR/engram_consolidated" # Use consolidated server
+# Build command with full absolute paths for scripts but preserving current directory
+CMD="python $OLLAMA_BRIDGE $MODEL --prompt-type $PROMPT_TYPE --client-id $CLIENT_ID --temperature $TEMPERATURE --max-tokens $MAX_TOKENS"
 
-# Memory import for Ollama - includes client ID
-MEMORY_IMPORT="from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z; print(\"${GREEN}💭 Memory functions loaded (Client: ${CLIENT_ID})!${RESET}\"); status = s(); previous = l(3); print(\"\")"
+if [ "$MEMORY_FUNCTIONS" = true ]; then
+  CMD="$CMD --memory-functions"
+fi
 
-# Alternative import with engram namespace support
-ALT_MEMORY_IMPORT="
-# Setup Python environment
-import sys, os
-
-# Set client ID for this Ollama instance
-os.environ['ENGRAM_CLIENT_ID'] = '${CLIENT_ID}'
-
-# Add Engram directories to Python path to ensure modules can be found
-ENGRAM_LOCATIONS = [
-    '$ENGRAM_DIR',  # Use the detected directory
-    '$HOME/projects/github/Engram',  # Default location
-    os.path.expanduser('~/projects/github/Engram'),  # Expanded default path
-]
-
-for location in ENGRAM_LOCATIONS:
-    if location and location not in sys.path:
-        sys.path.insert(0, location)
-        print(f\"${YELLOW}Added {location} to Python path${RESET}\")
-
-# Import from engram namespace only
-try:
-    # Load memory functions from engram
-    from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-    print(\"${GREEN}💭 Memory functions loaded from engram package (Client: ${CLIENT_ID})!${RESET}\")
-    
-    # Try to load communication functions
-    try:
-        from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
-        print(\"${GREEN}💬 Communication functions loaded from engram package!${RESET}\")
-        # Show communication status
-        print(\"\\n${BLUE}AI-to-AI Communication Status:${RESET}\")
-        my_id = wi()
-        comm_status = cs()
-    except ImportError as e:
-        print(f\"${YELLOW}⚠️ Communication functions not available in engram package: {e}${RESET}\")
-except ImportError as e:
-    print(f\"${RED}❌ Failed to import memory functions from engram package: {e}${RESET}\")
-    print(\"${RED}❌ Ollama will run without memory capabilities${RESET}\")
-    sys.exit(1)
-
-# Check memory service status
-try:
-    status = s()
-    previous = l(3)
-    print(f\"${GREEN}✓ Memory service status checked successfully${RESET}\")
-except Exception as e:
-    print(f\"${RED}❌ Error checking memory status: {e}${RESET}\")
-    print(\"${YELLOW}⚠️ Memory service may not be running correctly${RESET}\")
-
-print(\"\")"
-
-# Create Ollama Bridge Python script
-OLLAMA_BRIDGE_SCRIPT=$(cat << 'EOF'
-#!/usr/bin/env python3
-"""
-Ollama Bridge for Engram Memory
-This script creates a bridge between Ollama and Engram, allowing Ollama models
-to use Engram's memory system.
-"""
-
-import os
-import sys
-import argparse
-import json
-from typing import List, Dict, Any, Optional
-import requests
-
-# Import Engram memory functions
-try:
-    from engram.cli.quickmem import m, t, r, w, l, c, k, s, a, p, v, d, n, q, y, z
-    MEMORY_AVAILABLE = True
-except ImportError:
-    print("Warning: Engram memory functions not available")
-    MEMORY_AVAILABLE = False
-
-# Ollama API settings
-OLLAMA_API_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_API_URL = f"{OLLAMA_API_HOST}/api/chat"
-
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Ollama Bridge for Engram Memory")
-    parser.add_argument("model", type=str, help="Ollama model to use (e.g., llama3:8b)")
-    parser.add_argument("--system", type=str, help="System prompt", default="")
-    parser.add_argument("--temperature", type=float, help="Temperature (0.0-1.0)", default=0.7)
-    parser.add_argument("--top-p", type=float, help="Top-p sampling", default=0.9)
-    parser.add_argument("--max-tokens", type=int, help="Maximum tokens to generate", default=2048)
-    parser.add_argument("--client-id", type=str, help="Engram client ID", default="ollama")
-    return parser.parse_args()
-
-def call_ollama_api(model: str, messages: List[Dict[str, str]], 
-                   system: Optional[str] = None,
-                   temperature: float = 0.7, 
-                   top_p: float = 0.9,
-                   max_tokens: int = 2048) -> Dict[str, Any]:
-    """Call the Ollama API with the given parameters."""
-    
-    payload = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-        "options": {
-            "temperature": temperature,
-            "top_p": top_p,
-            "num_predict": max_tokens
-        }
-    }
-    
-    if system:
-        payload["system"] = system
-    
-    try:
-        response = requests.post(OLLAMA_API_URL, json=payload)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error communicating with Ollama API: {e}")
-        return {"error": str(e)}
-
-def main():
-    """Main function for the Ollama bridge."""
-    args = parse_args()
-    
-    # Set client ID for Engram
-    os.environ["ENGRAM_CLIENT_ID"] = args.client_id
-    
-    # Check if Ollama is running
-    try:
-        response = requests.get(f"{OLLAMA_API_HOST}/api/tags")
-        if response.status_code != 200:
-            print(f"Error connecting to Ollama: {response.status_code}")
-            sys.exit(1)
-        
-        # Check if model is available
-        available_models = [model["name"] for model in response.json().get("models", [])]
-        if args.model not in available_models:
-            print(f"Warning: Model '{args.model}' not found in available models.")
-            print(f"Available models: {', '.join(available_models)}")
-            proceed = input("Do you want to pull this model now? (y/n): ")
-            if proceed.lower() == 'y':
-                print(f"Pulling model {args.model}...")
-                pull_response = requests.post(f"{OLLAMA_API_HOST}/api/pull", json={"name": args.model})
-                if pull_response.status_code != 200:
-                    print(f"Error pulling model: {pull_response.status_code}")
-                    sys.exit(1)
-                print(f"Model {args.model} pulled successfully!")
-            else:
-                print("Please choose an available model or pull the requested model first.")
-                sys.exit(1)
-    except requests.exceptions.ConnectionError:
-        print("Error: Ollama is not running. Please start Ollama first.")
-        sys.exit(1)
-    
-    # Check if memory service is running
-    if MEMORY_AVAILABLE:
-        try:
-            status = s()
-            print(f"Memory service status: {status}")
-        except Exception as e:
-            print(f"Error checking memory status: {e}")
-            print("Warning: Memory service may not be running correctly")
-
-    # Print welcome message
-    print(f"\nOllama Bridge with Engram Memory")
-    print(f"Model: {args.model}")
-    print(f"Client ID: {args.client_id}")
-    print(f"Type 'exit' or '/quit' to exit, '/reset' to reset chat history\n")
-    
-    # Initialize chat history
-    chat_history = []
-    
-    if MEMORY_AVAILABLE:
-        # Load most recent memories
-        try:
-            recent_memories = l(5)
-            if recent_memories:
-                print("Recent memories:")
-                for memory in recent_memories:
-                    print(f"- {memory[:80]}...")
-                
-                use_recent = input("Include recent memories in conversation? (y/n): ")
-                if use_recent.lower() == 'y':
-                    # Add memories to system prompt
-                    memory_text = "Here are some recent memories that might be relevant:\n"
-                    for memory in recent_memories:
-                        memory_text += f"- {memory}\n"
-                    
-                    if args.system:
-                        args.system = args.system + "\n\n" + memory_text
-                    else:
-                        args.system = memory_text
-        except Exception as e:
-            print(f"Error loading recent memories: {e}")
-    
-    # Main chat loop
-    while True:
-        # Get user input
-        user_input = input("\nYou: ")
-        
-        # Handle special commands
-        if user_input.lower() in ['exit', '/quit']:
-            break
-        elif user_input.lower() == '/reset':
-            chat_history = []
-            print("Chat history reset.")
-            continue
-        elif user_input.lower().startswith('/remember '):
-            # Save to memory
-            memory_text = user_input[10:]
-            if MEMORY_AVAILABLE:
-                m(memory_text)
-                print(f"Saved to memory: {memory_text}")
-            else:
-                print("Memory functions not available.")
-            continue
-        elif user_input.lower() == '/memories':
-            # List recent memories
-            if MEMORY_AVAILABLE:
-                recent_memories = l(5)
-                print("Recent memories:")
-                for memory in recent_memories:
-                    print(f"- {memory}")
-            else:
-                print("Memory functions not available.")
-            continue
-        elif user_input.lower().startswith('/search '):
-            # Search memories
-            query = user_input[8:]
-            if MEMORY_AVAILABLE:
-                results = k(query)
-                print(f"Memory search results for '{query}':")
-                for result in results:
-                    print(f"- {result}")
-            else:
-                print("Memory functions not available.")
-            continue
-        
-        # Add user message to chat history
-        chat_history.append({"role": "user", "content": user_input})
-        
-        # Call Ollama API
-        response = call_ollama_api(
-            model=args.model,
-            messages=chat_history,
-            system=args.system,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            max_tokens=args.max_tokens
-        )
-        
-        if "error" in response:
-            print(f"Error: {response['error']}")
-            continue
-        
-        # Get assistant response
-        assistant_message = response.get("message", {}).get("content", "")
-        if assistant_message:
-            print(f"\n{args.model}: {assistant_message}")
-            
-            # Add assistant message to chat history
-            chat_history.append({"role": "assistant", "content": assistant_message})
-            
-            # Automatically save significant interactions to memory
-            if MEMORY_AVAILABLE and len(user_input) > 20 and len(assistant_message) > 50:
-                memory_text = f"User asked: '{user_input}' and {args.model} responded: '{assistant_message[:100]}...'"
-                m(memory_text)
-        else:
-            print("Error: No response from model")
-
-if __name__ == "__main__":
-    main()
-EOF
-)
-
-# Function to check if Engram is running
-check_engram_running() {
-    echo -e "${BLUE}${BOLD}Checking Engram services...${RESET}"
-    
-    # First check directly if the process is running using pgrep
-    # This is more reliable than grep as it won't match itself
-    ENGRAM_PIDS=$(pgrep -f "engram.api.consolidated_server" 2>/dev/null)
-    PROCESS_RUNNING=$?
-    
-    # Also check if something is already using port 8000
-    if command -v lsof >/dev/null 2>&1; then
-        PORT_IN_USE=$(lsof -i :8000 -t 2>/dev/null)
-        if [ -n "$PORT_IN_USE" ]; then
-            PORT_PROCESS=$(ps -p $PORT_IN_USE -o command= 2>/dev/null)
-            echo -e "${YELLOW}Port 8000 is already in use by process: $PORT_PROCESS (PID: $PORT_IN_USE)${RESET}"
-            
-            # If the process is Engram, report it as running
-            if echo "$PORT_PROCESS" | grep -q "engram"; then
-                echo -e "${GREEN}Engram process detected on port 8000${RESET}"
-                PROCESS_RUNNING=0
-                ENGRAM_PIDS=$PORT_IN_USE
-            fi
-        fi
-    fi
-    
-    if [ $PROCESS_RUNNING -eq 0 ] && [ -n "$ENGRAM_PIDS" ]; then
-        echo -e "${GREEN}Engram process detected as running with PID(s): $ENGRAM_PIDS${RESET}"
-        
-        # Check if HTTP endpoint is responding
-        if curl -s "http://127.0.0.1:8000/health" > /dev/null 2>&1; then
-            echo -e "${GREEN}Engram API is responding at http://127.0.0.1:8000${RESET}"
-            return 0  # Services are running and responsive
-        else
-            echo -e "${YELLOW}Engram process is running but API is not responding${RESET}"
-            # Continue with check script for more details
-        fi
-    else
-        echo -e "${YELLOW}No Engram process detected${RESET}"
-    fi
-    
-    # If process check was inconclusive, use the check script for more details
-    if [ -x "$ENGRAM_CHECK" ]; then
-        "$ENGRAM_CHECK"
-        
-        # Also check directly if memory server is running according to the check script
-        if "$ENGRAM_CHECK" | grep -q "Memory Server: ✅ Running"; then
-            echo -e "${GREEN}Engram services reported as running by check script${RESET}"
-            return 0  # Services are running
-        else
-            echo -e "${RED}Engram services are not properly running according to check script${RESET}"
-            return 1  # Services are not running properly
-        fi
-    else
-        echo -e "${RED}Engram check script not found or not executable${RESET}"
-        return 2
-    fi
-}
-
-# Function to start Engram services
-start_engram_services() {
-    echo -e "${YELLOW}${BOLD}Starting Engram services...${RESET}"
-    
-    # Check if we should restart existing services
-    ps aux | grep "engram.api.consolidated_server" | grep -v "grep" > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        echo -e "${YELLOW}Engram services already running. We'll connect to the existing service.${RESET}"
-        return 0
-    fi
-    
-    # Also check if port 8000 is in use
-    if command -v lsof >/dev/null 2>&1; then
-        PORT_IN_USE=$(lsof -i :8000 -t 2>/dev/null)
-        if [ -n "$PORT_IN_USE" ]; then
-            PORT_PROCESS=$(ps -p $PORT_IN_USE -o command= 2>/dev/null)
-            echo -e "${RED}Port 8000 is already in use by process: $PORT_PROCESS (PID: $PORT_IN_USE)${RESET}"
-            echo -e "${YELLOW}Killing process using port 8000...${RESET}"
-            kill -15 $PORT_IN_USE 2>/dev/null
-            sleep 2
-        fi
-    fi
-    
-    # Kill any leftover services to ensure clean restart
-    echo -e "${YELLOW}Stopping any leftover services...${RESET}"
-    pkill -f "engram.api.server" >/dev/null 2>&1
-    pkill -f "engram.api.http_wrapper" >/dev/null 2>&1
-    pkill -f "engram.api.consolidated_server" >/dev/null 2>&1
-    sleep 1
-    
-    # Start consolidated memory service
-    if [ -x "$ENGRAM_STARTUP" ]; then
-        echo -e "${BLUE}Starting consolidated memory service...${RESET}"
-        
-        # Create temp file for output
-        ERROR_LOG="/tmp/engram_error_$$.log"
-        
-        # Change to Engram directory and activate venv
-        cd "$ENGRAM_DIR"
-        source venv/bin/activate 2>/dev/null || true
-        
-        # Run with output capture to file
-        # Pass our environment variable to the startup script
-        if [ "$VECTOR_DB_AVAILABLE" = false ]; then
-            echo -e "${BLUE}Executing:${RESET} $ENGRAM_STARTUP --client-id server --data-dir $HOME/.engram --fallback"
-            # First attempt with explicit fallback mode
-            "$ENGRAM_STARTUP" --client-id "server" --data-dir "$HOME/.engram" --fallback >$ERROR_LOG 2>&1 &
-        else
-            echo -e "${BLUE}Executing:${RESET} $ENGRAM_STARTUP --client-id server --data-dir $HOME/.engram"
-            # Start with vector database if dependencies are available
-            ENGRAM_USE_FALLBACK=0 "$ENGRAM_STARTUP" --client-id "server" --data-dir "$HOME/.engram" >$ERROR_LOG 2>&1 &
-        fi
-        STARTUP_PID=$!
-        sleep 3
-        
-        # Check if process is still running (didn't crash)
-        if kill -0 $STARTUP_PID 2>/dev/null; then
-            echo -e "${GREEN}Engram service started with PID: $STARTUP_PID${RESET}"
-        else
-            echo -e "${RED}Engram service process started but terminated immediately${RESET}"
-            echo -e "${YELLOW}Error output:${RESET}"
-            if [ -f "$ERROR_LOG" ]; then
-                # First, check for NumPy-related errors
-                if grep -q "numpy" "$ERROR_LOG" || grep -q "sentence_transformers" "$ERROR_LOG" || grep -q "qdrant" "$ERROR_LOG"; then
-                    echo -e "${RED}Vector database dependency issue detected${RESET}"
-                    echo -e "${YELLOW}To fix vector database integration, run:${RESET}"
-                    echo -e "${GREEN}cd $ENGRAM_DIR && python vector_db_setup.py --install${RESET}"
-                    echo -e "${YELLOW}For now, memory will run without vector database capabilities${RESET}"
-                    echo -e "${YELLOW}Starting in fallback mode...${RESET}"
-                    
-                    # Try running with fallback flag
-                    export PYTHONPATH="$ENGRAM_DIR:$PYTHONPATH"
-                    "$ENGRAM_STARTUP" --client-id "server" --data-dir "$HOME/.engram" --fallback >$ERROR_LOG 2>&1 &
-                    STARTUP_PID=$!
-                    sleep 3
-                    
-                    # Check if fallback mode is running
-                    if kill -0 $STARTUP_PID 2>/dev/null; then
-                        echo -e "${GREEN}Engram service started in fallback mode with PID: $STARTUP_PID${RESET}"
-                        return 0
-                    else
-                        echo -e "${RED}Fallback mode also failed to start${RESET}"
-                        cat "$ERROR_LOG"
-                        return 1
-                    fi
-                else
-                    # Show the full error log for other errors
-                    cat "$ERROR_LOG"
-                fi
-            else
-                echo "No error log available"
-            fi
-            return 1
-        fi
-    else
-        echo -e "${RED}Engram startup script not found or not executable${RESET}"
-        return 1
-    fi
-    
-    # Verify service is running
-    ps aux | grep "engram.api.consolidated_server" | grep -v "grep" > /dev/null 2>&1
-    PS_CHECK=$?
-    if [ $PS_CHECK -eq 0 ]; then
-        echo -e "${GREEN}${BOLD}Engram consolidated service verified running!${RESET}"
-        
-        # Try to wait for service to be fully ready
-        echo -e "${BLUE}Waiting for service to be fully ready...${RESET}"
-        for i in {1..5}; do
-            # Try to connect to the health endpoint
-            if curl -s "http://127.0.0.1:8000/health" > /dev/null 2>&1; then
-                echo -e "${GREEN}Service is responding to requests!${RESET}"
-                return 0
-            fi
-            sleep 1
-        done
-        
-        # Even if health check fails, return success if process is running
-        echo -e "${YELLOW}Service process is running but not responding to requests yet${RESET}"
-        return 0
-    else
-        echo -e "${RED}Failed to start Engram consolidated service${RESET}"
-        return 1
-    fi
-}
-
-# Function to check if Ollama is installed and running
-check_ollama() {
-    echo -e "${BLUE}${BOLD}Checking Ollama installation...${RESET}"
-    
-    if ! command -v ollama >/dev/null 2>&1; then
-        echo -e "${RED}Ollama is not installed or not in PATH${RESET}"
-        echo -e "${YELLOW}Please install Ollama from https://ollama.ai${RESET}"
-        return 1
-    fi
-    
-    echo -e "${GREEN}Ollama is installed${RESET}"
-    
-    # Check if Ollama server is running
-    echo -e "${BLUE}Checking if Ollama server is running...${RESET}"
-    if ! curl -s "http://localhost:11434/api/tags" >/dev/null 2>&1; then
-        echo -e "${YELLOW}Ollama server is not running${RESET}"
-        echo -e "${BLUE}Attempting to start Ollama server...${RESET}"
-        
-        # Try to start Ollama server
-        ollama serve >/dev/null 2>&1 &
-        OLLAMA_PID=$!
-        sleep 3
-        
-        # Check if process is still running
-        if kill -0 $OLLAMA_PID 2>/dev/null; then
-            echo -e "${GREEN}Ollama server started with PID: $OLLAMA_PID${RESET}"
-        else
-            echo -e "${RED}Failed to start Ollama server${RESET}"
-            echo -e "${YELLOW}Please start Ollama server manually:${RESET}"
-            echo -e "${GREEN}   ollama serve${RESET}"
-            return 1
-        fi
-    else
-        echo -e "${GREEN}Ollama server is running${RESET}"
-    fi
-    
-    # Check if the requested model exists
-    echo -e "${BLUE}Checking if model '$MODEL_NAME' is available...${RESET}"
-    if ! ollama list | grep -q "$MODEL_NAME"; then
-        echo -e "${YELLOW}Model '$MODEL_NAME' is not available locally${RESET}"
-        echo -e "${BLUE}Do you want to pull the model now? (y/n)${RESET}"
-        read -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}Pulling model '$MODEL_NAME'...${RESET}"
-            ollama pull "$MODEL_NAME"
-            if [ $? -ne 0 ]; then
-                echo -e "${RED}Failed to pull model '$MODEL_NAME'${RESET}"
-                return 1
-            fi
-            echo -e "${GREEN}Model '$MODEL_NAME' pulled successfully${RESET}"
-        else
-            echo -e "${YELLOW}Please pull the model manually:${RESET}"
-            echo -e "${GREEN}   ollama pull $MODEL_NAME${RESET}"
-            return 1
-        fi
-    else
-        echo -e "${GREEN}Model '$MODEL_NAME' is available${RESET}"
-    fi
-    
-    return 0
-}
-
-# Main script execution
-echo -e "${BOLD}${BLUE}====== Ollama with Engram (Client: $CLIENT_ID) ======${RESET}"
-
-# Check for essential packages only - don't try to install everything
-echo -e "${BLUE}Checking for essential packages...${RESET}"
-MISSING_PACKAGES=false
-
-for pkg in numpy uvicorn fastapi httpx requests; do
-    if ! python -c "import $pkg" >/dev/null 2>&1; then
-        echo -e "${YELLOW}Package $pkg is not installed${RESET}"
-        MISSING_PACKAGES=true
-    fi
+for model in $AVAILABLE_MODELS; do
+  CMD="$CMD --available-models $model"
 done
 
-if [ "$MISSING_PACKAGES" = true ]; then
-    echo -e "${YELLOW}Some required packages are missing. You may need to install them manually:${RESET}"
-    echo -e "${YELLOW}   pip install numpy uvicorn fastapi httpx requests${RESET}"
-    read -p "Continue anyway? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-else
-    echo -e "${GREEN}All essential packages are installed.${RESET}"
-fi
+# Start the Ollama bridge
+echo "Starting Ollama bridge with Engram memory..."
+echo "Model: $MODEL"
+echo "Prompt type: $PROMPT_TYPE"
+echo "Client ID: $CLIENT_ID"
+echo "Working directory: $CURRENT_DIR"
+echo ""
+echo "Type 'exit' or '/quit' to exit"
+echo ""
 
-# Check for vector database packages
-VECTOR_DB_AVAILABLE=true
-echo -e "${BLUE}Checking for vector database dependencies...${RESET}"
+# Force the use of fallback file-based memory (no vector DB)
+export ENGRAM_USE_FALLBACK=1
 
-if ! python -c "import chromadb" >/dev/null 2>&1; then
-    echo -e "${YELLOW}Package chromadb is not installed - vector search will not be available${RESET}"
-    VECTOR_DB_AVAILABLE=false
-    export ENGRAM_USE_FALLBACK=1
-elif ! python -c "import sentence_transformers" >/dev/null 2>&1; then
-    echo -e "${YELLOW}Package sentence_transformers is not installed - vector search will not be available${RESET}"
-    VECTOR_DB_AVAILABLE=false
-    export ENGRAM_USE_FALLBACK=1
-else
-    echo -e "${GREEN}Vector database dependencies are installed.${RESET}"
-    # Ensure we're not using fallback mode
-    export ENGRAM_USE_FALLBACK=0
-    
-    # Double-check version compatibility
-    if ! python -c "import numpy; major=int(numpy.__version__.split('.')[0]); assert major < 2, 'NumPy 2.x detected'" >/dev/null 2>&1; then
-        echo -e "${YELLOW}NumPy version 2.x detected, which may be incompatible with sentence_transformers${RESET}"
-        echo -e "${YELLOW}For full vector search capability, you might need to downgrade NumPy:${RESET}"
-        echo -e "${YELLOW}   pip install numpy<2.0.0${RESET}"
-        echo -e "${YELLOW}Alternatively, run:${RESET}"
-        echo -e "${YELLOW}   python $ENGRAM_DIR/vector_db_setup.py --install${RESET}"
-    fi
-fi
-
-# Check if Engram services are running
-check_engram_running
-status=$?
-
-# Start Engram services if needed
-if [ $status -ne 0 ]; then
-    echo -e "${YELLOW}Engram services need to be started${RESET}"
-    start_engram_services
-    
-    # Re-check after starting
-    ENGRAM_PIDS=$(pgrep -f "engram.api.consolidated_server" 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$ENGRAM_PIDS" ]; then
-        echo -e "${GREEN}Engram services successfully started and running!${RESET}"
-    else
-        echo -e "${RED}Failed to start Engram services. Ollama will run without memory.${RESET}"
-        if [ "$MEMORY_ONLY" = false ]; then
-            read -p "Press Enter to continue anyway, or Ctrl+C to abort..."
-        else
-            exit 1
-        fi
-    fi
-else
-    echo -e "${GREEN}Engram services are running!${RESET}"
-fi
-
-# Check if we're running in memory-only mode
-if [ "$MEMORY_ONLY" = true ]; then
-    echo -e "${GREEN}${BOLD}Memory services are ready. Not launching Ollama (--memory-only was specified).${RESET}"
-    exit 0
-fi
-
-# Check if Ollama is installed and running
-check_ollama
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Ollama setup is incomplete. Please resolve the issues above.${RESET}"
-    exit 1
-fi
-
-# Check if our modified bridge script already exists
-OLLAMA_BRIDGE_PATH="$ENGRAM_DIR/ollama_bridge.py"
-if [ -f "$OLLAMA_BRIDGE_PATH" ]; then
-    echo -e "${BLUE}Using existing Ollama bridge script at ${OLLAMA_BRIDGE_PATH}...${RESET}"
-    # We don't overwrite the existing script as it might have been fixed/modified
-else
-    echo -e "${BLUE}Creating Ollama bridge script at ${OLLAMA_BRIDGE_PATH}...${RESET}"
-    echo "$OLLAMA_BRIDGE_SCRIPT" > "$OLLAMA_BRIDGE_PATH"
-    chmod +x "$OLLAMA_BRIDGE_PATH"
-fi
-
-# Launch Ollama bridge
-echo -e "${BLUE}${BOLD}Launching Ollama with model $MODEL_NAME (Client: $CLIENT_ID) and Engram memory...${RESET}"
-
-# Add memory functions flag if enabled
-if [ "$MEMORY_FUNCTIONS" = true ]; then
-  echo -e "${BLUE}Memory functions are enabled. Model can use REMEMBER:, SEARCH:, etc. commands${RESET}"
-  python "$OLLAMA_BRIDGE_PATH" --client-id "$CLIENT_ID" --memory-functions "$MODEL_NAME"
-else
-  python "$OLLAMA_BRIDGE_PATH" --client-id "$CLIENT_ID" "$MODEL_NAME"
-fi
-
-echo -e "${BLUE}${BOLD}====== Ollama session ended ======${RESET}"
+# Execute the command from the current directory
+# This ensures the bridge sees the files in the user's current directory
+exec $CMD

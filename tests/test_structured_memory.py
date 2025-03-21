@@ -2,7 +2,7 @@
 """
 Tests for the Structured Memory and Nexus Interface
 
-These tests verify the core functionality of the Claude Memory Bridge
+These tests verify the core functionality of the Engram Memory system's
 structured memory and memory-enabled AI assistant capabilities.
 """
 
@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 # Import the memory services
-from cmb.core.memory import MemoryService
-from cmb.core.structured_memory import StructuredMemory
-from cmb.core.nexus import NexusInterface
+from engram.core.memory_faiss import MemoryService
+from engram.core.structured_memory import StructuredMemory
+from engram.core.nexus import NexusInterface
 
 @pytest.fixture
 def temp_data_dir():
@@ -200,7 +200,7 @@ class TestStructuredMemory:
         """Test adding a memory with automatic categorization."""
         # Add memory with auto categorization
         memory_id = await structured_memory.add_auto_categorized_memory(
-            content="My name is Casey and I'm working on Claude Memory Bridge"
+            content="My name is Casey and I'm working on the Engram Memory system"
         )
         
         assert memory_id is not None
@@ -215,7 +215,7 @@ class TestStructuredMemory:
         
         # Test with manual override
         memory_id2 = await structured_memory.add_auto_categorized_memory(
-            content="My name is Casey and I'm working on Claude Memory Bridge",
+            content="My name is Casey and I'm working on the Engram Memory system",
             manual_category="projects",
             manual_importance=3,
             manual_tags=["override-test"]
@@ -334,7 +334,7 @@ class TestStructuredMemory:
         )
         
         await structured_memory.add_memory(
-            content="Claude Memory Bridge is a project for persistent memory across sessions",
+            content="Engram Memory is a project for persistent memory across AI sessions",
             category="projects",
             importance=4
         )
@@ -387,20 +387,20 @@ class TestNexusInterface:
         )
         
         await structured_memory.add_memory(
-            content="Casey is working on a memory bridge for Claude",
+            content="Casey is working on the Engram Memory system",
             category="projects",
             importance=5
         )
         
         # Process a user message
         context = await nexus_interface.process_message(
-            message="Let's continue our discussion about Claude Memory Bridge",
+            message="Let's continue our discussion about the Engram Memory system",
             is_user=True
         )
         
         # Should have enhanced with relevant memory
         assert "Relevant Memory Context" in context
-        assert "memory bridge" in context.lower()
+        assert "memory system" in context.lower()
         
         # Check that message was added to conversation history
         assert len(nexus_interface.conversation_history) == 1
@@ -408,7 +408,7 @@ class TestNexusInterface:
         
         # Process an assistant message
         assistant_result = await nexus_interface.process_message(
-            message="I'll help you with the Claude Memory Bridge project",
+            message="I'll help you with the Engram Memory system project",
             is_user=False
         )
         

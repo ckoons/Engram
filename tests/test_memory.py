@@ -2,7 +2,7 @@
 """
 Tests for the Memory Service
 
-These tests verify the core functionality of the Claude Memory Bridge memory service.
+These tests verify the core functionality of the Engram Memory system's memory service.
 """
 
 import os
@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 
 # Import the memory service
-from cmb.core.memory import MemoryService
+from engram.core.memory_faiss import MemoryService
 
 @pytest.fixture
 def temp_data_dir():

@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # Import quickmem module
-from cmb.cli.quickmem import (
+from engram.cli.quickmem import (
     memory_digest, start_nexus, process_message, auto_remember, end_nexus
 )
 
@@ -57,8 +57,8 @@ class TestQuickMemWithStructuredMemory:
 - ★★★★ Casey prefers Python for development (2025-03-15)
 
 ## Projects
-- ★★★★★ Working on Claude Memory Bridge (2025-03-15)
-- ★★★★ Memory Bridge uses structured storage (2025-03-15)
+- ★★★★★ Working on Engram Memory system (2025-03-15)
+- ★★★★ Engram uses structured storage with FAISS (2025-03-15)
 """
         }
         
@@ -71,7 +71,7 @@ class TestQuickMemWithStructuredMemory:
         assert digest is not None
         assert "Memory Digest" in digest
         assert "Casey is a software engineer" in digest
-        assert "Working on Claude Memory Bridge" in digest
+        assert "Working on Engram Memory system" in digest
         
         # Verify the correct URL was called
         mock_urlopen.assert_called_once()
@@ -98,7 +98,7 @@ Session: Test Session (ID: session-1234567890)
 - ★★★★★ Casey is a software engineer (2025-03-15)
 
 ## Projects
-- ★★★★★ Working on Claude Memory Bridge (2025-03-15)
+- ★★★★★ Working on Engram Memory system (2025-03-15)
 """
         }
         
@@ -130,17 +130,17 @@ Session: Test Session (ID: session-1234567890)
             "result": """### Relevant Memory Context
 
 #### Projects
-- ★★★★★ Working on Claude Memory Bridge (2025-03-15)
-- ★★★★ Memory Bridge uses structured storage (2025-03-15)
+- ★★★★★ Working on Engram Memory system (2025-03-15)
+- ★★★★ Engram uses structured storage with FAISS (2025-03-15)
 
-Let's discuss the Claude Memory Bridge project"""
+Let's discuss the Engram Memory system project"""
         }
         
         mock_urlopen.return_value = mock_http_response(process_data)
         
         # Call process_message function
         result = await process_message(
-            message="Let's discuss the Claude Memory Bridge project",
+            message="Let's discuss the Engram Memory system project",
             is_user=True
         )
         
@@ -148,7 +148,7 @@ Let's discuss the Claude Memory Bridge project"""
         assert result is not None
         assert "Relevant Memory Context" in result
         assert "Projects" in result
-        assert "Working on Claude Memory Bridge" in result
+        assert "Working on Engram Memory system" in result
         
         # Verify the correct URL was called
         mock_urlopen.assert_called_once()
