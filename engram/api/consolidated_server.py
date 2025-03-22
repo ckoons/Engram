@@ -15,6 +15,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Body, HTTPException, Query, APIRouter, Header, Depends
@@ -97,11 +98,45 @@ class ClientModel(BaseModel):
     structured_memory: bool
     nexus: bool
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan manager for FastAPI - handles startup and shutdown"""
+    global memory_manager, default_client_id
+    
+    # Get default client ID from environment
+    default_client_id = os.environ.get("ENGRAM_CLIENT_ID", "claude")
+    data_dir = os.environ.get("ENGRAM_DATA_DIR", None)
+    
+    # Initialize memory manager
+    try:
+        memory_manager = MemoryManager(data_dir=data_dir)
+        logger.info(f"Memory manager initialized with data directory: {data_dir or '~/.engram'}")
+        logger.info(f"Default client ID: {default_client_id}")
+        
+        # Pre-initialize default client
+        await memory_manager.get_memory_service(default_client_id)
+        await memory_manager.get_structured_memory(default_client_id)
+        await memory_manager.get_nexus_interface(default_client_id)
+        logger.info(f"Pre-initialized services for default client: {default_client_id}")
+        logger.info("Server startup complete and ready to accept connections")
+    except Exception as e:
+        logger.error(f"Failed to initialize memory manager: {e}")
+        # Re-raise to prevent server from starting with incomplete initialization
+        raise
+    
+    yield  # Server is running here
+    
+    # Shutdown code
+    if memory_manager:
+        await memory_manager.shutdown()
+        logger.info("Memory manager shut down")
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Engram Consolidated API",
     description="Unified API for Engram combining core memory services and HTTP wrapper",
-    version="0.7.0"
+    version="0.7.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -150,9 +185,11 @@ async def get_nexus_interface(client_id: str = Depends(get_client_id)) -> NexusI
         raise HTTPException(status_code=500, detail="Memory manager not initialized")
     return await memory_manager.get_nexus_interface(client_id)
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize memory manager on startup."""
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan manager for FastAPI - handles startup and shutdown"""
     global memory_manager, default_client_id
     
     # Get default client ID from environment
@@ -170,8 +207,26 @@ async def startup_event():
         await memory_manager.get_structured_memory(default_client_id)
         await memory_manager.get_nexus_interface(default_client_id)
         logger.info(f"Pre-initialized services for default client: {default_client_id}")
+        logger.info("Server startup complete and ready to accept connections")
     except Exception as e:
         logger.error(f"Failed to initialize memory manager: {e}")
+        # Re-raise to prevent server from starting with incomplete initialization
+        raise
+    
+    yield  # Server is running here
+    
+    # Shutdown code
+    if memory_manager:
+        await memory_manager.shutdown()
+        logger.info("Memory manager shut down")
+
+# Use the lifespan manager
+app = FastAPI(
+    title="Engram Consolidated API",
+    description="Unified API for Engram combining core memory services and HTTP wrapper",
+    version="0.7.0",
+    lifespan=lifespan
+)
 
 @app.get("/", tags=["Root"])
 async def root():
