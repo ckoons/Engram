@@ -1,11 +1,11 @@
 # Engram
 
 <div align="center">
-  <img src="images/icon.jpg" alt="Engram Logo" width="1024"/>
+  <img src="images/icon.jpg" alt="Engram Logo" width="800"/>
   <h3>AI Engrams<br>Persistent Memory Across Sessions</h3>
 </div>
 
-A lightweight system providing AI with persistent memory traces, enabling continuous conversation and growth across sessions.
+A lightweight system providing AI with persistent memory, enabling continuous conversation and growth across sessions.
 
 ## Overview
 
