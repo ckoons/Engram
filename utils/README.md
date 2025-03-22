@@ -19,11 +19,14 @@ This directory contains utility scripts and tools for the Engram project.
 
 ## AI Communication
 
-- `ai_communication.py` - Core functionality for AI-to-AI communication
-- `hybrid_ai_system.py` - Hybrid AI system implementation
+- `ai_communication/` - Scripts for AI-to-AI communication:
+  - `ai_communication.py` - Core functionality
+  - `hybrid_ai_system.py` - Hybrid AI system implementation
+  - `direct_message.py` - Direct messaging between AIs
+  - `check_memory.py` - Memory checking utilities
+  - And more
 - `llama_message.py` - Message formatting for Llama models
 - `llama_to_claude.py` - Communication bridge between Llama and Claude
-- `ai_communication/` - Additional AI communication scripts and examples
 
 ## Multi-Claude Support
 
