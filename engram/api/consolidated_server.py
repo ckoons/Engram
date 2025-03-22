@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 
 import uvicorn
-from fastapi import FastAPI, Body, HTTPException, Query, APIRouter
+from fastapi import FastAPI, Body, HTTPException, Query, APIRouter, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -51,6 +51,8 @@ try:
     from engram.core.memory import MemoryService, HAS_MEM0
     from engram.core.structured_memory import StructuredMemory
     from engram.core.nexus import NexusInterface
+    # Use the local memory_manager file instead
+    from engram.core.memory_manager import MemoryManager
 except ImportError as e:
     logger.error(f"Failed to import Engram modules: {e}")
     logger.error("Make sure you're running this from the project root or it's installed")
@@ -85,12 +87,21 @@ class HealthResponse(BaseModel):
     vector_search: bool = False
     vector_db_version: Optional[str] = None
     vector_db_name: Optional[str] = None
+    multi_client: bool = True
+
+class ClientModel(BaseModel):
+    client_id: str
+    last_access_time: str
+    idle_seconds: int
+    active: bool
+    structured_memory: bool
+    nexus: bool
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Engram Consolidated API",
     description="Unified API for Engram combining core memory services and HTTP wrapper",
-    version="0.6.0"
+    version="0.7.0"
 )
 
 # Add CORS middleware
@@ -107,37 +118,60 @@ core_router = APIRouter(prefix="/memory", tags=["Core Memory API"])
 http_router = APIRouter(prefix="/http", tags=["HTTP Wrapper API"])
 nexus_router = APIRouter(prefix="/nexus", tags=["Nexus API"])
 structured_router = APIRouter(prefix="/structured", tags=["Structured Memory API"])
+clients_router = APIRouter(prefix="/clients", tags=["Client Management API"])
 
 # Global service instances
-memory_service = None
-structured_memory = None
-nexus = None
-client_id = None
+memory_manager = None
+default_client_id = "claude"
+
+# Helper to get client ID from request
+async def get_client_id(x_client_id: Optional[str] = Header(None)) -> str:
+    """Get client ID from header or use default."""
+    return x_client_id or default_client_id
+
+# Helper to get memory service for client
+async def get_memory_service(client_id: str = Depends(get_client_id)) -> MemoryService:
+    """Get memory service for the specified client."""
+    if memory_manager is None:
+        raise HTTPException(status_code=500, detail="Memory manager not initialized")
+    return await memory_manager.get_memory_service(client_id)
+
+# Helper to get structured memory for client
+async def get_structured_memory(client_id: str = Depends(get_client_id)) -> StructuredMemory:
+    """Get structured memory for the specified client."""
+    if memory_manager is None:
+        raise HTTPException(status_code=500, detail="Memory manager not initialized")
+    return await memory_manager.get_structured_memory(client_id)
+
+# Helper to get nexus interface for client
+async def get_nexus_interface(client_id: str = Depends(get_client_id)) -> NexusInterface:
+    """Get nexus interface for the specified client."""
+    if memory_manager is None:
+        raise HTTPException(status_code=500, detail="Memory manager not initialized")
+    return await memory_manager.get_nexus_interface(client_id)
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize all memory services on startup."""
-    global memory_service, structured_memory, nexus, client_id
+    """Initialize memory manager on startup."""
+    global memory_manager, default_client_id
     
-    # Get client ID from environment
-    client_id = os.environ.get("ENGRAM_CLIENT_ID", "claude")
+    # Get default client ID from environment
+    default_client_id = os.environ.get("ENGRAM_CLIENT_ID", "claude")
     data_dir = os.environ.get("ENGRAM_DATA_DIR", None)
     
-    # Initialize services
+    # Initialize memory manager
     try:
-        # Initialize memory service
-        memory_service = MemoryService(client_id=client_id, data_dir=data_dir)
-        logger.info(f"Memory service initialized with client ID: {client_id}")
+        memory_manager = MemoryManager(data_dir=data_dir)
+        logger.info(f"Memory manager initialized with data directory: {data_dir or '~/.engram'}")
+        logger.info(f"Default client ID: {default_client_id}")
         
-        # Initialize structured memory
-        structured_memory = StructuredMemory(client_id=client_id, data_dir=data_dir)
-        logger.info(f"Structured memory service initialized with client ID: {client_id}")
-        
-        # Initialize Nexus interface
-        nexus = NexusInterface(memory_service=memory_service, structured_memory=structured_memory)
-        logger.info(f"Nexus interface initialized with client ID: {client_id}")
+        # Pre-initialize default client
+        await memory_manager.get_memory_service(default_client_id)
+        await memory_manager.get_structured_memory(default_client_id)
+        await memory_manager.get_nexus_interface(default_client_id)
+        logger.info(f"Pre-initialized services for default client: {default_client_id}")
     except Exception as e:
-        logger.error(f"Failed to initialize memory services: {e}")
+        logger.error(f"Failed to initialize memory manager: {e}")
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -148,17 +182,21 @@ async def root():
             "memory": "/memory",
             "http": "/http",
             "nexus": "/nexus",
-            "structured": "/structured"
+            "structured": "/structured",
+            "clients": "/clients"
         }
     }
 
 @app.get("/health", tags=["Root"])
-async def health_check():
+async def health_check(client_id: str = Depends(get_client_id)):
     """Check if all memory services are running."""
-    if memory_service is None:
-        raise HTTPException(status_code=500, detail="Memory service not initialized")
+    if memory_manager is None:
+        raise HTTPException(status_code=500, detail="Memory manager not initialized")
     
     try:
+        # Get memory service for the client
+        memory_service = await memory_manager.get_memory_service(client_id)
+        
         # Determine memory implementation type
         vector_available = False
         vector_db_version = None
@@ -182,6 +220,10 @@ async def health_check():
         # Get available namespaces
         namespaces = await memory_service.get_namespaces()
         
+        # Get client services status
+        structured_memory_available = client_id in memory_manager.structured_memories
+        nexus_available = client_id in memory_manager.nexus_interfaces
+        
         # Enhanced status response with implementation details
         response_data = {
             "status": "ok",
@@ -192,8 +234,9 @@ async def health_check():
             "vector_search": vector_available,
             "vector_db_name": vector_db_name,
             "namespaces": namespaces,
-            "structured_memory_available": structured_memory is not None,
-            "nexus_available": nexus is not None
+            "structured_memory_available": structured_memory_available,
+            "nexus_available": nexus_available,
+            "multi_client": True
         }
         
         # Include version info if available
@@ -203,8 +246,7 @@ async def health_check():
         return HealthResponse(**response_data)
     except Exception as e:
         # Log the error but don't crash the health endpoint
-        import logging
-        logging.error(f"Error in health check: {e}")
+        logger.error(f"Error in health check: {e}")
         
         # Return a degraded but functional response
         return HealthResponse(
@@ -214,18 +256,19 @@ async def health_check():
             vector_available=False,
             implementation_type="fallback",
             namespaces=[],
-            structured_memory_available=structured_memory is not None,
-            nexus_available=nexus is not None
+            structured_memory_available=False,
+            nexus_available=False,
+            multi_client=True
         )
 
 # ==================== CORE MEMORY API ROUTES ====================
 
 @core_router.post("/query")
-async def query_memory(query_data: MemoryQuery):
+async def query_memory(
+    query_data: MemoryQuery,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Query memory for relevant information."""
-    if memory_service is None:
-        raise HTTPException(status_code=500, detail="Memory service not initialized")
-    
     try:
         results = await memory_service.search(
             query=query_data.query, 
@@ -244,11 +287,11 @@ async def query_memory(query_data: MemoryQuery):
         raise HTTPException(status_code=500, detail=f"Failed to query memory: {str(e)}")
 
 @core_router.post("/store")
-async def store_memory(memory_data: MemoryStore):
+async def store_memory(
+    memory_data: MemoryStore,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Store a new memory."""
-    if memory_service is None:
-        raise HTTPException(status_code=500, detail="Memory service not initialized")
-    
     try:
         # Store the memory
         success = await memory_service.add(
@@ -270,12 +313,10 @@ async def store_memory(memory_data: MemoryStore):
 @core_router.post("/store_conversation")
 async def store_conversation(
     conversation: List[Dict[str, str]] = Body(...),
-    namespace: str = Query("conversations")
+    namespace: str = Query("conversations"),
+    memory_service: MemoryService = Depends(get_memory_service)
 ):
     """Store a complete conversation."""
-    if memory_service is None:
-        raise HTTPException(status_code=500, detail="Memory service not initialized")
-    
     try:
         # Generate a unique conversation ID
         conversation_id = f"conversation_{int(datetime.now().timestamp())}"
@@ -299,11 +340,11 @@ async def store_conversation(
         raise HTTPException(status_code=500, detail=f"Failed to store conversation: {str(e)}")
 
 @core_router.post("/context")
-async def get_context(query_data: MemoryMultiQuery):
+async def get_context(
+    query_data: MemoryMultiQuery,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Get formatted memory context across multiple namespaces."""
-    if memory_service is None:
-        raise HTTPException(status_code=500, detail="Memory service not initialized")
-    
     try:
         # Get formatted context
         context = await memory_service.get_relevant_context(
@@ -323,11 +364,11 @@ async def get_context(query_data: MemoryMultiQuery):
         raise HTTPException(status_code=500, detail=f"Failed to get context: {str(e)}")
 
 @core_router.post("/clear/{namespace}")
-async def clear_namespace(namespace: str):
+async def clear_namespace(
+    namespace: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Clear all memories in a namespace."""
-    if memory_service is None:
-        raise HTTPException(status_code=500, detail="Memory service not initialized")
-    
     try:
         success = await memory_service.clear_namespace(namespace)
         
@@ -346,12 +387,10 @@ async def clear_namespace(namespace: str):
 async def http_store_memory(
     key: str,
     value: str,
-    namespace: str = "conversations"
+    namespace: str = "conversations",
+    memory_service: MemoryService = Depends(get_memory_service)
 ):
     """Store a memory in the specified namespace."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         # Store the memory
         success = await memory_service.add(
@@ -370,25 +409,55 @@ async def http_store_memory(
         return {"status": "error", "message": f"Failed to store memory: {str(e)}"}
 
 @http_router.get("/thinking")
-async def http_store_thinking(thought: str):
+async def http_store_thinking(
+    thought: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Store a thought in the thinking namespace."""
-    return await http_store_memory(key="thought", value=thought, namespace="thinking")
+    try:
+        success = await memory_service.add(
+            content=thought,
+            namespace="thinking",
+            metadata={"key": "thought"}
+        )
+        return {
+            "success": success,
+            "key": "thought",
+            "namespace": "thinking",
+        }
+    except Exception as e:
+        logger.error(f"Error storing thought: {e}")
+        return {"status": "error", "message": f"Failed to store thought: {str(e)}"}
 
 @http_router.get("/longterm")
-async def http_store_longterm(info: str):
+async def http_store_longterm(
+    info: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Store important information in the longterm namespace."""
-    return await http_store_memory(key="important", value=info, namespace="longterm")
+    try:
+        success = await memory_service.add(
+            content=info,
+            namespace="longterm", 
+            metadata={"key": "important"}
+        )
+        return {
+            "success": success,
+            "key": "important",
+            "namespace": "longterm",
+        }
+    except Exception as e:
+        logger.error(f"Error storing longterm memory: {e}")
+        return {"status": "error", "message": f"Failed to store longterm memory: {str(e)}"}
 
 @http_router.get("/query")
 async def http_query_memory(
     query: str,
     namespace: str = "conversations",
-    limit: int = 5
+    limit: int = 5,
+    memory_service: MemoryService = Depends(get_memory_service)
 ):
     """Query memory for relevant information."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         # Search for memories
         results = await memory_service.search(
@@ -406,12 +475,10 @@ async def http_query_memory(
 async def http_get_context(
     query: str,
     include_thinking: bool = True,
-    limit: int = 3
+    limit: int = 3,
+    memory_service: MemoryService = Depends(get_memory_service)
 ):
     """Get formatted context from multiple namespaces."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         # Determine which namespaces to include
         namespaces = ["conversations", "longterm"]
@@ -431,11 +498,11 @@ async def http_get_context(
         return {"status": "error", "message": f"Failed to get context: {str(e)}"}
 
 @http_router.get("/clear/{namespace}")
-async def http_clear_namespace(namespace: str):
+async def http_clear_namespace(
+    namespace: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Clear all memories in a namespace."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         success = await memory_service.clear_namespace(namespace)
         return {"success": success, "namespace": namespace}
@@ -444,11 +511,12 @@ async def http_clear_namespace(namespace: str):
         return {"status": "error", "message": f"Failed to clear namespace: {str(e)}"}
 
 @http_router.get("/write")
-async def write_session_memory(content: str, metadata: str = None):
+async def write_session_memory(
+    content: str, 
+    metadata: str = None,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Write a memory to the session namespace for persistence."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         # Parse metadata if provided
         meta_dict = json.loads(metadata) if metadata else None
@@ -460,11 +528,11 @@ async def write_session_memory(content: str, metadata: str = None):
         return {"status": "error", "message": f"Failed to write session memory: {str(e)}"}
 
 @http_router.get("/load")
-async def load_session_memory(limit: int = 1):
+async def load_session_memory(
+    limit: int = 1,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Load previous session memory."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         # Search for the most recent session memories
         results = await memory_service.search(
@@ -486,11 +554,13 @@ async def load_session_memory(limit: int = 1):
         return {"status": "error", "message": f"Failed to load session memory: {str(e)}"}
 
 @http_router.get("/compartment/create")
-async def create_compartment(name: str, description: str = None, parent: str = None):
+async def create_compartment(
+    name: str, 
+    description: str = None, 
+    parent: str = None,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Create a new memory compartment."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         compartment_id = await memory_service.create_compartment(name, description, parent)
         if compartment_id:
@@ -502,11 +572,13 @@ async def create_compartment(name: str, description: str = None, parent: str = N
         return {"status": "error", "message": f"Failed to create compartment: {str(e)}"}
 
 @http_router.get("/compartment/store")
-async def store_in_compartment(compartment: str, content: str, key: str = "memory"):
+async def store_in_compartment(
+    compartment: str, 
+    content: str, 
+    key: str = "memory",
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Store content in a specific compartment."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         # Find compartment ID if a name was provided
         compartment_id = None
@@ -541,11 +613,11 @@ async def store_in_compartment(compartment: str, content: str, key: str = "memor
         return {"status": "error", "message": f"Failed to store in compartment: {str(e)}"}
 
 @http_router.get("/compartment/activate")
-async def activate_compartment(compartment: str):
+async def activate_compartment(
+    compartment: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Activate a compartment to include in automatic context retrieval."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         success = await memory_service.activate_compartment(compartment)
         return {"success": success}
@@ -554,11 +626,11 @@ async def activate_compartment(compartment: str):
         return {"status": "error", "message": f"Failed to activate compartment: {str(e)}"}
 
 @http_router.get("/compartment/deactivate")
-async def deactivate_compartment(compartment: str):
+async def deactivate_compartment(
+    compartment: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Deactivate a compartment to exclude from automatic context retrieval."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         success = await memory_service.deactivate_compartment(compartment)
         return {"success": success}
@@ -567,11 +639,11 @@ async def deactivate_compartment(compartment: str):
         return {"status": "error", "message": f"Failed to deactivate compartment: {str(e)}"}
 
 @http_router.get("/compartment/list")
-async def list_compartments(include_expired: bool = False):
+async def list_compartments(
+    include_expired: bool = False,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """List all compartments."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         compartments = await memory_service.list_compartments(include_expired)
         return {"compartments": compartments, "count": len(compartments)}
@@ -580,11 +652,12 @@ async def list_compartments(include_expired: bool = False):
         return {"status": "error", "message": f"Failed to list compartments: {str(e)}"}
 
 @http_router.get("/compartment/expire")
-async def set_compartment_expiration(compartment_id: str, days: int = None):
+async def set_compartment_expiration(
+    compartment_id: str, 
+    days: int = None,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Set expiration for a compartment in days."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         success = await memory_service.set_compartment_expiration(compartment_id, days)
         return {"success": success}
@@ -593,11 +666,12 @@ async def set_compartment_expiration(compartment_id: str, days: int = None):
         return {"status": "error", "message": f"Failed to set compartment expiration: {str(e)}"}
 
 @http_router.get("/keep")
-async def keep_memory(memory_id: str, days: int = 30):
+async def keep_memory(
+    memory_id: str, 
+    days: int = 30,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Keep a memory for a specified number of days."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         success = await memory_service.keep_memory(memory_id, days)
         return {"success": success}
@@ -606,11 +680,11 @@ async def keep_memory(memory_id: str, days: int = 30):
         return {"status": "error", "message": f"Failed to keep memory: {str(e)}"}
 
 @http_router.get("/private")
-async def store_private(content: str):
+async def store_private(
+    content: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Store a private memory."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         memory_id, success = await memory_service.add_private(content)
         if success:
@@ -622,11 +696,12 @@ async def store_private(content: str):
         return {"status": "error", "message": f"Failed to store private memory: {str(e)}"}
 
 @http_router.get("/private/get")
-async def get_private(memory_id: str, use_emergency: bool = False):
+async def get_private(
+    memory_id: str, 
+    use_emergency: bool = False,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Get a specific private memory."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         memory = await memory_service.get_private(memory_id, use_emergency)
         if memory:
@@ -638,11 +713,10 @@ async def get_private(memory_id: str, use_emergency: bool = False):
         return {"status": "error", "message": f"Failed to retrieve private memory: {str(e)}"}
 
 @http_router.get("/private/list")
-async def list_private():
+async def list_private(
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """List all private memories."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         memories = await memory_service.list_private()
         return {"success": True, "memories": memories}
@@ -651,11 +725,11 @@ async def list_private():
         return {"status": "error", "message": f"Failed to list private memories: {str(e)}"}
 
 @http_router.get("/private/delete")
-async def delete_private(memory_id: str):
+async def delete_private(
+    memory_id: str,
+    memory_service: MemoryService = Depends(get_memory_service)
+):
     """Delete a private memory."""
-    if memory_service is None:
-        return {"status": "error", "message": "Memory service not initialized"}
-    
     try:
         success = await memory_service.delete_private(memory_id)
         return {"success": success}
@@ -1045,11 +1119,57 @@ async def update_nexus_settings(settings: str):
         logger.error(f"Error updating Nexus settings: {e}")
         return {"status": "error", "message": f"Failed to update Nexus settings: {str(e)}"}
 
+# ----- Client Management API Routes -----
+
+@clients_router.get("/list", tags=["Client Management"])
+async def list_clients():
+    """List all active clients."""
+    if memory_manager is None:
+        raise HTTPException(status_code=500, detail="Memory manager not initialized")
+    
+    try:
+        clients = await memory_manager.list_clients()
+        return {"clients": clients}
+    except Exception as e:
+        logger.error(f"Error listing clients: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list clients: {str(e)}")
+
+@clients_router.get("/status/{client_id}", tags=["Client Management"])
+async def client_status(client_id: str):
+    """Get status for a specific client."""
+    if memory_manager is None:
+        raise HTTPException(status_code=500, detail="Memory manager not initialized")
+    
+    try:
+        clients = await memory_manager.list_clients()
+        for client in clients:
+            if client["client_id"] == client_id:
+                return client
+        
+        raise HTTPException(status_code=404, detail=f"Client '{client_id}' not found")
+    except Exception as e:
+        logger.error(f"Error getting client status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get client status: {str(e)}")
+
+@clients_router.post("/cleanup", tags=["Client Management"])
+async def cleanup_idle_clients(idle_threshold: int = 3600):
+    """Clean up clients that have been idle for a specified time."""
+    if memory_manager is None:
+        raise HTTPException(status_code=500, detail="Memory manager not initialized")
+    
+    try:
+        count = await memory_manager.cleanup_idle_clients(idle_threshold)
+        return {"cleaned_clients": count}
+    except Exception as e:
+        logger.error(f"Error cleaning up idle clients: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clean up idle clients: {str(e)}")
+
 # Include all routers
 app.include_router(core_router)
 app.include_router(http_router)
 app.include_router(nexus_router)
 app.include_router(structured_router)
+app.include_router(clients_router)
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -1094,7 +1214,8 @@ def main():
         config["debug"] = True
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Set environment variables
+    # Set environment variables for default client ID and data directory
+    # Note: The client_id is now just a default - multiple clients are supported
     os.environ["ENGRAM_CLIENT_ID"] = config["client_id"]
     os.environ["ENGRAM_DATA_DIR"] = config["data_dir"]
     
@@ -1105,7 +1226,8 @@ def main():
     
     # Start the server
     logger.info(f"Starting Engram consolidated server on {config['host']}:{config['port']}")
-    logger.info(f"Client ID: {config['client_id']}, Data directory: {config['data_dir']}")
+    logger.info(f"Default client ID: {config['client_id']}, Data directory: {config['data_dir']}")
+    logger.info(f"Multiple client IDs are supported - use the X-Client-ID header to specify")
     logger.info(f"Auto-agency: {'enabled' if config['auto_agency'] else 'disabled'}")
     
     if config["debug"]:
