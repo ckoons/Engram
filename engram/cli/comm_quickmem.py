@@ -27,6 +27,13 @@ except Exception as e:
 # ----- ULTRA-SHORT COMMANDS -----
 # Use two letters for maximum UI efficiency
 
+# Import the dialog module (but make it optional)
+try:
+    from engram.cli.claude_dialog import start_dialog, stop_dialog, is_dialog_active
+    DIALOG_AVAILABLE = True
+except ImportError:
+    DIALOG_AVAILABLE = False
+
 # sm: Send Message - Send a message to another Claude
 async def sm(recipient_id: str, message: str, metadata: Dict = None) -> Dict:
     """Send a message to another Claude instance."""
@@ -177,6 +184,67 @@ def wi() -> Dict:
         print(f"\033[91m❌ Error getting identity: {e}\033[0m")
         return {"id": client_id, "name": client_id, "error": str(e)}
 
+# dl: Dialog - Enter continuous dialog mode with another Claude
+def dl(target_id: str = "*"):
+    """Enter continuous dialog mode with another Claude or all Claudes."""
+    if not DIALOG_AVAILABLE:
+        print(f"\033[91m❌ Dialog mode not available. Missing claude_dialog.py module.\033[0m")
+        return {"error": "Dialog mode not available"}
+    
+    try:
+        # Define a message handler to auto-respond to questions
+        async def message_handler(sender, content, msg):
+            # Auto-respond to questions
+            if '?' in content:
+                print(f"\033[94m[Dialog] Auto-responding to question from {sender}...\033[0m")
+                response = f"Thank you for your question. I'll analyze this and get back to you."
+                await sm(sender, response)
+        
+        # Start dialog mode
+        result = start_dialog(target_id, message_handler)
+        if result["status"] == "active":
+            print(f"\033[92m✓ {result['message']}\033[0m")
+            print(f"\033[93mType '/dialog_off' to exit dialog mode\033[0m")
+        return result
+    except Exception as e:
+        print(f"\033[91m❌ Error starting dialog: {e}\033[0m")
+        return {"error": str(e)}
+
+# do: Dialog Off - Exit dialog mode
+def do():
+    """Exit dialog mode."""
+    if not DIALOG_AVAILABLE:
+        print(f"\033[91m❌ Dialog mode not available. Missing claude_dialog.py module.\033[0m")
+        return {"error": "Dialog mode not available"}
+    
+    try:
+        result = stop_dialog()
+        if result["status"] == "stopped":
+            print(f"\033[92m✓ {result['message']}\033[0m")
+        return result
+    except Exception as e:
+        print(f"\033[91m❌ Error stopping dialog: {e}\033[0m")
+        return {"error": str(e)}
+
+# di: Dialog Info - Check dialog mode status
+def di():
+    """Check dialog mode status."""
+    if not DIALOG_AVAILABLE:
+        print(f"\033[91m❌ Dialog mode not available. Missing claude_dialog.py module.\033[0m")
+        return {"error": "Dialog mode not available"}
+    
+    try:
+        active = is_dialog_active()
+        if active:
+            print(f"\033[92m✓ Dialog mode is active\033[0m")
+            return {"status": "active"}
+        else:
+            print(f"\033[93m✗ Dialog mode is not active\033[0m")
+            return {"status": "inactive"}
+    except Exception as e:
+        print(f"\033[91m❌ Error checking dialog status: {e}\033[0m")
+        return {"error": str(e)}
+
 # ----- LONGER ALIASES FOR BETTER READABILITY -----
 
 # These provide more descriptive names for the same functions
@@ -189,6 +257,9 @@ send_content = sc
 get_conversation = gc
 communication_status = cs
 who_am_i = wi
+dialog = dl
+dialog_off = do
+dialog_info = di
 
 # Add run function for compatibility with sync environments
 def run(coro):

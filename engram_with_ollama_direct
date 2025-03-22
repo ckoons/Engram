@@ -88,7 +88,13 @@ fi
 
 # Apply the memory patch
 echo "Applying FAISS memory patch to Engram..."
-python "$SCRIPT_DIR/engram_memory_patch.py"
+MEMORY_PATCH_PATH="$SCRIPT_DIR/utils/engram_memory_patch.py"
+if [ -f "$MEMORY_PATCH_PATH" ]; then
+  python "$MEMORY_PATCH_PATH"
+else
+  echo "Warning: Memory patch not found at $MEMORY_PATCH_PATH"
+  echo "Continuing without applying the patch..."
+fi
 
 # Use absolute paths for Ollama bridge script
 OLLAMA_BRIDGE="$SCRIPT_DIR/ollama_bridge.py"

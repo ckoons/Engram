@@ -27,6 +27,12 @@ Engram provides AI systems with the ability to maintain memory traces across dif
   - **Enhanced Retrieval**: Context-aware memory loading
   - **Nexus Interface**: Standardized API for memory-enabled AI assistants
 
+- **AI-to-AI Communication**:
+  - **Cross-Model Messaging**: Enables different AI models to communicate
+  - **Dialog Mode**: Continuous conversation between models
+  - **Wildcard Listening**: Monitor and respond to all models automatically
+  - **Auto-Reply**: Automatic responses to questions from other models
+
 - **Multiple Memory Categories**:
   - `personal`: Store user personal information (highest importance)
   - `projects`: Connect context across different workspaces

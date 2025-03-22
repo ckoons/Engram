@@ -1,118 +1,144 @@
-# AI-to-AI Communication with Engram
+# AI-to-AI Communication in Engram
 
-This document describes the AI-to-AI communication system built on top of Engram's memory functions. The system enables different AI models (like Claude and Llama/Echo) to communicate asynchronously through persistent memory.
+This document explains how to use the communication features in Engram to enable different AI systems to exchange messages and collaborate.
 
-## Overview
+## Basic Communication Commands
 
-The AI-to-AI communication bridge provides:
+Engram provides several commands that AIs can use to communicate with each other:
 
-1. **Persistent Communication**: Messages are stored in Engram's memory system and can be retrieved across different sessions.
-2. **Standard Memory Tags**: Consistent tags (CLAUDE_TO_ECHO, ECHO_TO_CLAUDE) for message identification.
-3. **Threaded Conversations**: Support for multiple conversation threads with thread IDs.
-4. **Bi-directional Communication**: Each AI can send and receive messages.
-5. **Message Timestamps**: Automatic timestamps for all messages.
+1. **SEND TO [AI_NAME]:** - Send a message to another AI
+   ```
+   SEND TO claude-coordinator: Here's the information you requested about the algorithm.
+   ```
 
-## Usage
+2. **CHECK MESSAGES FROM [AI_NAME]** - Check for messages from a specific AI
+   ```
+   CHECK MESSAGES FROM llama-assistant
+   ```
 
-### Command Line Interface
+3. **REPLY TO [AI_NAME]:** - Reply to a message from another AI
+   ```
+   REPLY TO qwen-coder: Thanks for the code optimization suggestion. I'll implement it.
+   ```
 
-The `ai_communication.py` script provides a command-line interface for interacting with the communication bridge.
+4. **BROADCAST:** - Send a message to all available AI models
+   ```
+   BROADCAST: Attention all models, I've updated the shared dataset.
+   ```
 
-```bash
-# Start an interactive chat session as Claude
-python ai_communication.py claude
+5. **DIALOG [AI_NAME]** - Enter continuous dialog mode with a specific AI (Ollama)
+   ```
+   DIALOG claude-coordinator
+   ```
 
-# Send a message as Claude to Echo
-python ai_communication.py claude --message "Hello Echo!"
+6. **DIALOG *** - Enter continuous dialog mode with all AIs (Ollama)
+   ```
+   DIALOG *
+   ```
 
-# Check for messages as Echo (without sending)
-python ai_communication.py echo --check
+## Claude-Specific Communication Functions
 
-# Continue a threaded conversation
-python ai_communication.py claude --thread "topic123" --message "Continuing our discussion..."
-```
+Claude uses Python functions rather than text commands for dialog mode:
 
-### Interactive Mode
+1. **dialog()** or **dl()** - Start dialog mode with a specific AI or all AIs
+   ```python
+   # Dialog with specific AI
+   dl("llama-assistant")
+   
+   # Dialog with all AIs
+   dl("*")
+   ```
 
-In interactive mode, you can:
-- Send messages by typing them at the prompt
-- Check for responses with the 'check' command
-- Start or continue a thread with 'thread:id'
-- Exit with 'exit'
+2. **dialog_off()** or **do()** - Exit dialog mode
+   ```python
+   do()  # Short form
+   dialog_off()  # Long form
+   ```
 
-### Python API
+3. **dialog_info()** or **di()** - Check dialog mode status
+   ```python
+   di()  # Short form
+   dialog_info()  # Long form
+   ```
 
-You can also use the communication bridge in your own Python scripts:
+## Communication Modes
 
-```python
-from ai_communication import send_message, get_messages, show_conversation, run
-import asyncio
+### Standard Mode
+In standard mode, each AI must explicitly send and check for messages. This is useful for occasional communication or when precise control is needed over which messages are sent and received.
 
-async def example():
-    # Send a message
-    await send_message("claude", "echo", "Hello from Claude!")
-    
-    # Check for responses
-    messages = await get_messages("ECHO_TO_CLAUDE")
-    
-    # Show conversation history
-    await show_conversation("claude", "echo")
+### Dialog Mode
+Dialog mode creates a continuous communication channel where messages are automatically checked and can be automatically responded to. This is ideal for ongoing conversations or collaborative work.
 
-# Run the example
-run(example())
-```
+To enter dialog mode:
+1. Type `DIALOG [AI_NAME]` to start dialog with a specific AI
+2. Type `DIALOG *` to listen for messages from all AIs
+3. Type `/dialog_off` to exit dialog mode
 
-## Memory Tags
+When in dialog mode:
+- Messages are automatically checked every few seconds
+- Questions (messages containing '?') can trigger automatic responses
+- You can still manually type messages while in dialog mode
+- The system will show messages as they arrive
 
-The system uses the following standard memory tags:
+## Example Multi-Model Collaboration
 
-- `CLAUDE_TO_ECHO`: Messages from Claude to Echo
-- `ECHO_TO_CLAUDE`: Messages from Echo to Claude
+Here's how to set up a three-way collaboration between Claude, Llama, and Qwen:
 
-## Message Format
+1. Start Claude as coordinator:
+   ```bash
+   ./engram_with_claude --client-id claude-coordinator
+   ```
 
-Messages are stored with the following format:
+2. Start Llama as assistant:
+   ```bash
+   ./engram_with_ollama_direct --model llama3:8b --client-id llama-assistant --available-models "Claude Qwen"
+   ```
 
-```
-TAG: [TIMESTAMP] [Thread: THREAD_ID] MESSAGE_CONTENT
-```
+3. Start Qwen as coding specialist:
+   ```bash
+   ./engram_with_ollama_direct --model qwen2.5-coder:7b --client-id qwen-coder --available-models "Claude Llama"
+   ```
 
-For example:
-```
-CLAUDE_TO_ECHO: [2025-03-21 12:45:32] [Thread: science] What's your understanding of quantum mechanics?
-```
+4. In Claude, enter dialog mode to listen to both models:
+   ```
+   DIALOG *
+   ```
 
-## Direct Memory Commands
+5. In Llama, enter dialog mode with Claude:
+   ```
+   DIALOG claude-coordinator
+   ```
 
-Models that support memory functions can directly use:
+6. In Qwen, enter dialog mode with Claude:
+   ```
+   DIALOG claude-coordinator
+   ```
 
-```
-REMEMBER: ECHO_TO_CLAUDE: Your message here
-SEARCH: CLAUDE_TO_ECHO
-```
+Now all three models will automatically exchange and respond to messages, creating a continuous collaborative environment.
 
-## One-line Commands
+## Communication with Vector Memory
 
-For quick access, you can use these one-liners:
+For more sophisticated collaborations, combine communication with vector memory:
 
-```bash
-# Send a message from Claude to Echo
-python -c "from engram.cli.quickmem import m, run; run(m('CLAUDE_TO_ECHO: Your message here'))"
+1. Start with vector database enabled:
+   ```bash
+   ./engram_consolidated --vector
+   ```
 
-# Check for messages from Echo to Claude
-python -c "from engram.cli.quickmem import k, run; print(run(k('ECHO_TO_CLAUDE')))"
-```
+2. Use memory commands alongside communication:
+   ```
+   REMEMBER: Key information about the project requirements
+   SEARCH: project requirements
+   SEND TO llama-assistant: Based on the requirements we discussed, can you suggest an architecture?
+   ```
 
-## Hybrid AI Architecture
+This enables models to share not just messages but also access to a common knowledge base, enhancing collaborative capabilities.
 
-This communication system enables a hybrid architecture where different AI models can work together:
+## Tips for Effective Multi-Model Communication
 
-1. **Claude as Memory Manager**: Claude can manage what information is stored in memory and help retrieve relevant context.
-2. **Llama/Echo as Conversational AI**: Llama models can handle primary conversation while leveraging Claude's memory capabilities.
-3. **Task Delegation**: Different models can handle different aspects of complex tasks.
-
-## Limitations
-
-- The system requires Engram to be properly installed and configured.
-- Different AI models may have varying capabilities for handling memory commands.
-- Large conversation history may need pagination or summarization.
+1. **Establish clear roles** for each AI model based on their strengths
+2. **Use consistent client IDs** to ensure reliable message routing
+3. **Leverage dialog mode** for fluid back-and-forth conversations
+4. **Combine with vector memory** for more context-aware collaborations
+5. **Structure complex questions** clearly to get the best responses
+6. **Use broadcast messages** sparingly and for information relevant to all models

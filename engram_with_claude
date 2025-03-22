@@ -108,12 +108,24 @@ try:
     
     # Try to load communication functions
     try:
-        from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi
+        from engram.cli.comm_quickmem import sm, gm, ho, cc, lc, sc, gc, cs, wi, dl, do, di
         print(\"${GREEN}💬 Claude communication functions loaded from engram package!${RESET}\")
         # Show communication status
         print(\"\\n${BLUE}Claude-to-Claude Communication Status:${RESET}\")
         my_id = wi()
         comm_status = cs()
+        
+        # Initialize dialog support
+        try:
+            from engram.cli.claude_dialog import init_dialog
+            # Initialize dialog with client ID
+            init_dialog(\"${CLIENT_ID}\")
+            print(\"${GREEN}🗣️ Dialog mode functionality initialized!${RESET}\")
+            print(\"${YELLOW}Use 'dl(\\\"target_id\\\")' or 'dialog(\\\"target_id\\\")' to start dialog mode${RESET}\")
+            print(\"${YELLOW}Use 'dl(\\\"*\\\")' or 'dialog(\\\"*\\\")' to dialog with all models${RESET}\")
+            print(\"${YELLOW}Use 'do()' or 'dialog_off()' to exit dialog mode${RESET}\")
+        except ImportError as e:
+            print(f\"${YELLOW}⚠️ Dialog mode not available: {e}${RESET}\")
     except ImportError as e:
         print(f\"${YELLOW}⚠️ Claude communication functions not available in engram package: {e}${RESET}\")
 except ImportError as e:

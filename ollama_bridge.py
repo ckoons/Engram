@@ -97,6 +97,12 @@ class MemoryHandler:
         self.client_id = client_id
         self.sender_persona = "Echo"  # Default persona
         
+        # Dialog mode settings
+        self.dialog_mode = False
+        self.dialog_target = None
+        self.dialog_type = None
+        self.last_check_time = 0
+        
         # Try to get persona based on model name if available
         if "SYSTEM_PROMPTS_AVAILABLE" in globals() and SYSTEM_PROMPTS_AVAILABLE:
             try:
@@ -298,6 +304,46 @@ class MemoryHandler:
             print(f"Error broadcasting message: {e}")
             return {"error": str(e)}
             
+    def _handle_dialog_mode(self, recipient: str):
+        """
+        Handle entering dialog mode with a specific AI or with all AIs (*).
+        This function will inform the user that dialog mode has been activated,
+        but the actual implementation is handled in the main function.
+        
+        Args:
+            recipient: The client ID to dialog with, or '*' for all
+        
+        Returns:
+            Dict with dialog mode status
+        """
+        try:
+            dialog_target = recipient
+            
+            # Check if using wildcard
+            if dialog_target == "*":
+                dialog_message = "Entering dialog mode with ALL available AI models"
+                dialog_type = "all"
+            else:
+                dialog_message = f"Entering dialog mode with {dialog_target}"
+                dialog_type = "specific"
+            
+            # Store the dialog target for the main loop to use
+            self.dialog_mode = True
+            self.dialog_target = dialog_target
+            self.dialog_type = dialog_type
+            
+            # Return message to display to user
+            return {
+                "status": "active",
+                "dialog_with": dialog_target,
+                "type": dialog_type,
+                "message": dialog_message
+            }
+            
+        except Exception as e:
+            print(f"Error entering dialog mode: {e}")
+            return {"error": str(e)}
+            
     def detect_memory_operations(self, model_output: str):
         """Detect and execute memory operations in model output.
         
@@ -325,6 +371,7 @@ class MemoryHandler:
             (r"(?:CHECK MESSAGES FROM\s+(\w+)|(?:\*\*)?CHECK MESSAGES FROM\s+(\w+)(?:\*\*)?)", "check", self._handle_check_messages),
             (r"(?:REPLY TO\s+(\w+):|(?:\*\*)?REPLY TO\s+(\w+)(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "reply", self._handle_reply_message),
             (r"(?:BROADCAST:|(?:\*\*)?BROADCAST(?:\*\*)?:?)\s*(.+?)(?=\n|$)", "broadcast", self._handle_broadcast_message),
+            (r"(?:DIALOG\s+(\w+|\*)|(?:\*\*)?DIALOG\s+(\w+|\*)(?:\*\*)?)", "dialog", self._handle_dialog_mode),
         ]
         
         # Combine memory and communication patterns
@@ -600,17 +647,128 @@ When you use these commands, they will be processed and removed from your visibl
     # Main chat loop
     while True:
         try:
-            # Get user input
-            user_input = input("\nYou: ")
+            # Check for messages in dialog mode
+            if memory.dialog_mode and memory.dialog_target:
+                current_time = time.time()
+                # Only check messages every 2 seconds to avoid spamming
+                if current_time - memory.last_check_time >= 2:
+                    memory.last_check_time = current_time
+                    
+                    # Check for new messages based on dialog mode type
+                    if memory.dialog_type == "all":
+                        print("\n[Dialog] Checking for messages from all models...")
+                        # Try to list all connections and check each one
+                        try:
+                            from engram.cli.comm_quickmem import lc, gm, run
+                            connections = run(lc())
+                            new_messages_found = False
+                            
+                            for conn in connections:
+                                conn_id = conn.get("id", "")
+                                if conn_id and conn_id != memory.client_id:
+                                    messages = run(gm(conn_id, 3, False))
+                                    if messages and not isinstance(messages, dict):
+                                        new_messages_found = True
+                                        for msg in messages:
+                                            print(f"\n[Dialog] From {conn_id}: {msg.get('message', '')}")
+                                            
+                                            # Auto-reply if the message contains a question
+                                            content = msg.get('message', '')
+                                            if '?' in content:
+                                                # Process the message through Ollama
+                                                chat_history.append({"role": "user", "content": f"Message from {conn_id}: {content}"})
+                                                # Call Ollama API
+                                                response = call_ollama_api(
+                                                    model=args.model,
+                                                    messages=chat_history,
+                                                    system=args.system,
+                                                    temperature=args.temperature,
+                                                    top_p=args.top_p,
+                                                    max_tokens=args.max_tokens
+                                                )
+                                                
+                                                if "message" in response:
+                                                    ai_reply = response["message"]["content"]
+                                                    print(f"\n[Dialog] Auto-replying to {conn_id}...")
+                                                    memory._handle_reply_message(conn_id, ai_reply)
+                                                    chat_history.append({"role": "assistant", "content": ai_reply})
+                            
+                            if not new_messages_found:
+                                # Don't spam "no messages" - only show occasionally
+                                if int(current_time) % 10 == 0:  # Show every ~10 seconds
+                                    print("\n[Dialog] No new messages")
+                        except Exception as e:
+                            print(f"\n[Dialog] Error checking messages: {e}")
+                    else:
+                        # Check from specific target
+                        target = memory.dialog_target
+                        if target:
+                            try:
+                                from engram.cli.comm_quickmem import gm, run
+                                messages = run(gm(target, 3, False))
+                                if messages and not isinstance(messages, dict):
+                                    for msg in messages:
+                                        print(f"\n[Dialog] From {target}: {msg.get('message', '')}")
+                                        
+                                        # Auto-reply if the message contains a question
+                                        content = msg.get('message', '')
+                                        if '?' in content:
+                                            # Process the message through Ollama
+                                            chat_history.append({"role": "user", "content": f"Message from {target}: {content}"})
+                                            # Call Ollama API
+                                            response = call_ollama_api(
+                                                model=args.model,
+                                                messages=chat_history,
+                                                system=args.system,
+                                                temperature=args.temperature,
+                                                top_p=args.top_p,
+                                                max_tokens=args.max_tokens
+                                            )
+                                            
+                                            if "message" in response:
+                                                ai_reply = response["message"]["content"]
+                                                print(f"\n[Dialog] Auto-replying to {target}...")
+                                                memory._handle_reply_message(target, ai_reply)
+                                                chat_history.append({"role": "assistant", "content": ai_reply})
+                                else:
+                                    # Don't spam "no messages" - only show occasionally
+                                    if int(current_time) % 10 == 0:  # Show every ~10 seconds
+                                        print(f"\n[Dialog] No new messages from {target}")
+                            except Exception as e:
+                                print(f"\n[Dialog] Error checking messages from {target}: {e}")
+            
+            # Get user input with timeout to support dialog mode
+            user_input = None
+            if memory.dialog_mode:
+                import select
+                import sys
+                
+                # Check if there's input available with a 1-second timeout
+                ready, _, _ = select.select([sys.stdin], [], [], 1)
+                if ready:
+                    user_input = input("\nYou: ")
+                
+                # Continue the loop if no input and we're in dialog mode
+                if not user_input:
+                    continue
+            else:
+                user_input = input("\nYou: ")
             
             # Handle special commands
-            if user_input.lower() in ['exit', '/quit']:
+            if user_input and user_input.lower() in ['exit', '/quit']:
+                memory.dialog_mode = False  # Ensure dialog mode is turned off
                 break
-            elif user_input.lower() == '/reset':
+            elif user_input and user_input.lower() == '/reset':
                 chat_history = []
                 print("Chat history reset.")
                 continue
-            elif user_input.lower().startswith('/remember '):
+            elif user_input and user_input.lower() == '/dialog_off':
+                memory.dialog_mode = False
+                memory.dialog_target = None
+                memory.dialog_type = None
+                print("\n[Dialog mode deactivated]")
+                continue
+            elif user_input and user_input.lower().startswith('/remember '):
                 # Save to memory
                 memory_text = user_input[10:]
                 if MEMORY_AVAILABLE:
@@ -619,7 +777,7 @@ When you use these commands, they will be processed and removed from your visibl
                 else:
                     print("Memory functions not available.")
                 continue
-            elif user_input.lower() == '/memories':
+            elif user_input and user_input.lower() == '/memories':
                 # List recent memories
                 if MEMORY_AVAILABLE:
                     recent_memories = memory.get_recent_memories(5)
@@ -631,7 +789,7 @@ When you use these commands, they will be processed and removed from your visibl
                 else:
                     print("Memory functions not available.")
                 continue
-            elif user_input.lower().startswith('/search '):
+            elif user_input and user_input.lower().startswith('/search '):
                 # Search memories
                 query = user_input[8:]
                 if MEMORY_AVAILABLE:
@@ -644,6 +802,10 @@ When you use these commands, they will be processed and removed from your visibl
                 else:
                     print("Memory functions not available.")
                 continue
+            elif not user_input:
+                # This happens when in dialog mode and no input is available
+                continue
+                
         except EOFError:
             print("\nDetected EOF. Exiting...")
             break
