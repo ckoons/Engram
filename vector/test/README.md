@@ -1,41 +1,42 @@
 # FAISS Vector Storage for Engram
 
-This directory contains a simplified vector storage solution for Engram that works with NumPy 2.x.
+This directory contains test scripts and example implementations for the FAISS vector storage solution in Engram.
 
-## Background
+## Overview
 
-Engram's vector search functionality normally depends on:
-1. SentenceTransformers for text embedding
-2. ChromaDB or Qdrant for vector storage
+Engram uses FAISS (Facebook AI Similarity Search) for vector search functionality, providing:
 
-However, these libraries have dependencies on NumPy 1.x and don't work with NumPy 2.x, causing compatibility issues. This implementation provides a solution that works with NumPy 2.x by using:
-
-1. A simple text embedding system that doesn't depend on transformers
-2. FAISS for high-performance vector search
+1. Efficient semantic search for memories and information
+2. Compatible with all NumPy versions
+3. High-performance vector operations
 
 ## Files
 
-- `faiss_test.py` - A simple test script to verify FAISS works with NumPy 2.x
-- `simple_embedding.py` - A basic text embedding implementation without dependencies on transformer models
-- `vector_store.py` - A vector database implementation using FAISS
-- `engram_memory_adapter.py` - An adapter that implements Engram's memory API using FAISS
-- `engram_with_faiss_simple.py` - A launcher script for Engram with Ollama and FAISS
+- `faiss_test.py` - Test script to verify FAISS functionality
+- `simple_embedding.py` - Basic text embedding implementation
+- `vector_store.py` - Vector database implementation using FAISS
+- `engram_memory_adapter.py` - Adapter that implements Engram's memory API using FAISS
+- `engram_with_faiss_simple.py` - Launcher script for testing Engram with Ollama and FAISS
+- `engram_with_ollama_faiss` - Launcher script for Ollama with FAISS integration
+- `run_faiss_test.sh` - Helper script for running FAISS tests
+
+## Test Data
+
+The directory contains several test data directories:
+
+- `memories/` - Sample memories for testing
+- `test_memories/` - Additional test memories
+- `vector_data/` - Vector database test files
 
 ## Usage
 
-1. First, test that FAISS works with your NumPy version:
+1. Test FAISS functionality:
 
 ```bash
 python faiss_test.py
 ```
 
-2. Make the launcher executable:
-
-```bash
-chmod +x engram_with_faiss_simple.py
-```
-
-3. Run Engram with Ollama using the FAISS adapter:
+2. Run the test launcher with Ollama:
 
 ```bash
 ./engram_with_faiss_simple.py --model llama3:8b
@@ -43,25 +44,14 @@ chmod +x engram_with_faiss_simple.py
 
 ## How It Works
 
-This implementation:
+The test implementation:
 
-1. **Text Embedding**: Uses a simple TF-IDF-like approach to generate text embeddings without dependencies on transformer models
-2. **Vector Storage**: Uses FAISS for efficient vector search, which works with NumPy 2.x
-3. **Memory API**: Provides an API-compatible replacement for Engram's MemoryService class
-4. **Runtime Patching**: Replaces Engram's memory module at runtime with our FAISS-based implementation
+1. **Text Embedding**: Demonstrates how to generate text embeddings for vector search
+2. **Vector Storage**: Shows efficient vector search with FAISS
+3. **Memory API**: Provides an API-compatible implementation of Engram's MemoryService
+4. **Runtime Integration**: Shows how to integrate with Engram at runtime
 
-## Limitations
-
-The simple embedding system isn't as sophisticated as SentenceTransformers, so the quality of semantic search will be lower. However, it provides a functional solution until the underlying libraries add support for NumPy 2.x.
-
-## Future Improvements
-
-1. Add support for more sophisticated embedding methods
-2. Optimize vector search parameters
-3. Add more memory operations and features
-4. Create a seamless migration path for existing ChromaDB memories
-
-## Testing Memory Operations
+## Memory Operations
 
 You can test memory operations with commands like:
 
@@ -75,6 +65,6 @@ CONTEXT SEARCH FAISS library
 
 ## Notes
 
-- All memory operations should work as they do in standard Engram
-- The vector database is stored in the `memories` directory
-- No virtual environment is needed, as all dependencies work with NumPy 2.x
+- All memory operations work as they do in standard Engram
+- The test vector database is stored in the `memories` and `test_memories` directories
+- For production use, refer to the main Engram implementation in the core directory

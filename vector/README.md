@@ -15,7 +15,7 @@ Engram uses FAISS (Facebook AI Similarity Search) as its vector database solutio
 
 - High-performance vector similarity search
 - Compatible with all NumPy versions including 2.x
-- Used in both direct and virtual environment approaches
+- No longer has compatibility issues since ChromaDB was removed
 - Excellent for semantic search capabilities
 
 ## Usage
@@ -26,7 +26,17 @@ To use vector functionality, see:
 - `/docs/vector/FAISS_VECTOR_DATABASE.md` - Virtual environment approach
 - `/utils/vector_db_setup.py` - Setup and configuration utility
 
-## Test Environments
+## Directory Structure
 
-- `test/` directory contains test scripts and data 
-- `test_venv/` contains a test virtual environment
+- `ollama_faiss_venv/` - Virtual environment for FAISS with Ollama integration
+  - Used by `engram_with_ollama_faiss` script
+  - Contains production-ready dependencies for vector operations
+
+- `test/` - Test scripts and data for vector functionality
+  - Example implementations and tests for FAISS
+  - Sample vector databases and test memories
+  - Test utilities and adapters
+
+- `test_venv/` - Testing virtual environment
+  - Isolated environment for testing vector functionality
+  - Contains all dependencies needed for comprehensive testing
