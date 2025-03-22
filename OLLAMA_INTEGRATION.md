@@ -108,19 +108,18 @@ Specify which models are available for communication:
 
 ## Vector Database Options
 
-Engram supports two vector database options for semantic search:
+Engram uses the following vector database for semantic search:
 
-1. **ChromaDB**: Default option, works with NumPy 1.x
-2. **FAISS**: Alternative option, works with NumPy 2.x
+**FAISS**: Facebook AI Similarity Search, a high-performance vector database that works with all NumPy versions
 
 The choice is handled automatically by the launcher scripts:
 
 - `engram_with_ollama_direct`: **RECOMMENDED** - Uses FAISS via runtime patch (works with NumPy 2.x)
 - `engram_with_ollama_faiss`: Uses FAISS via virtual environment (works with NumPy 2.x)
-- `engram_with_ollama`: Original script, uses ChromaDB (requires NumPy 1.x) or file-based fallback
+- `engram_with_ollama`: Original script, can use file-based fallback if needed
 
-See [FAISS_DIRECT.md](./FAISS_DIRECT.md) for details on the direct FAISS integration.
-See [FAISS_VECTOR_DATABASE.md](./FAISS_VECTOR_DATABASE.md) for details on the virtual environment FAISS implementation.
+See [FAISS_DIRECT.md](./docs/vector/FAISS_DIRECT.md) for details on the direct FAISS integration.
+See [FAISS_VECTOR_DATABASE.md](./docs/vector/FAISS_VECTOR_DATABASE.md) for details on the virtual environment FAISS implementation.
 
 ## Implementation Details
 
@@ -137,8 +136,8 @@ The Ollama integration consists of several components:
 
 For more detailed information, see:
 
-- [Direct FAISS Integration](./FAISS_DIRECT.md) (Recommended)
-- [Virtual Environment FAISS](./FAISS_VECTOR_DATABASE.md)
+- [Direct FAISS Integration](./docs/vector/FAISS_DIRECT.md) (Recommended)
+- [Virtual Environment FAISS](./docs/vector/FAISS_VECTOR_DATABASE.md)
 - [API Documentation](./docs/ollama_integration.md)
 - [AI Communication Guide](./docs/ai_communication.md)
 - [Memory Management](./docs/memory_management.md)
@@ -149,7 +148,7 @@ For more detailed information, see:
 - Engram memory service installed and configured
 - Python 3.8+
 - Required packages: requests
-- For vector search: Either ChromaDB (NumPy 1.x) or FAISS (NumPy 2.x)
+- For vector search: FAISS (works with all NumPy versions)
 
 ## Troubleshooting
 
@@ -161,7 +160,7 @@ If you encounter issues:
      ./engram_with_ollama_direct --model llama3:8b
      ```
    - This solution directly patches the memory system at runtime to use FAISS
-   - See [FAISS_DIRECT.md](./FAISS_DIRECT.md) for details
+   - See [FAISS_DIRECT.md](./docs/vector/FAISS_DIRECT.md) for details
    
    - **Virtual Environment FAISS solution**:
      ```bash
