@@ -5,7 +5,7 @@
 set -e  # Exit on any error
 
 # Configuration
-VENV_NAME="ollama_faiss_venv"
+VENV_NAME="vector/ollama_faiss_venv"
 
 # Detect Python version
 if command -v python3.10 &>/dev/null; then
@@ -263,7 +263,7 @@ EOL
 
 # Create a launcher script for the virtual environment
 echo "Creating launcher script..."
-cat > engram_with_ollama_faiss <<EOL
+cat > ../engram_with_ollama_faiss <<EOL
 #!/bin/bash
 # Engram with Ollama - Fixed launcher script with FAISS vector database
 
@@ -344,7 +344,7 @@ if ! curl -s http://localhost:11434/api/tags > /dev/null; then
 fi
 
 # Activate the virtual environment
-source "\$SCRIPT_DIR/$VENV_NAME/bin/activate"
+source "\$SCRIPT_DIR/../$VENV_NAME/bin/activate"
 
 # Install FAISS adapter
 echo "Installing FAISS adapter for Engram..."
@@ -420,7 +420,7 @@ exec \$CMD
 EOL
 
 # Make the launcher script executable
-chmod +x engram_with_ollama_faiss
+chmod +x ../engram_with_ollama_faiss
 
 echo ""
 echo "=================================="

@@ -15,7 +15,7 @@ The virtual environment FAISS integration creates a dedicated Python environment
 
 The virtual environment integration uses:
 
-1. A dedicated virtual environment (`ollama_faiss_venv`)
+1. A dedicated virtual environment (`vector/ollama_faiss_venv`)
 2. Custom scripts for launching Ollama with this environment
 3. A FAISS adapter that ensures compatibility with Engram
 4. Special setup scripts to create and configure the environment
@@ -53,7 +53,7 @@ The setup script:
 
 ## Vector Test Environment
 
-The `vector_test/` directory contains:
+The `vector/test/` directory contains:
 - Test scripts for FAISS functionality
 - Sample vector databases
 - Test memories for verification
@@ -67,7 +67,7 @@ If you encounter issues:
 
 1. Delete the virtual environment and re-run setup:
    ```bash
-   rm -rf ollama_faiss_venv/
+   rm -rf vector/ollama_faiss_venv/
    ./utils/setup_ollama_env_with_faiss.sh
    ```
 

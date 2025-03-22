@@ -28,5 +28,5 @@ To use vector functionality, see:
 
 ## Test Environments
 
-- `vector_test/` directory contains test scripts and data
-- `vector_test_venv/` contains a test virtual environment
+- `test/` directory contains test scripts and data 
+- `test_venv/` contains a test virtual environment

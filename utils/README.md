@@ -23,6 +23,7 @@ This directory contains utility scripts and tools for the Engram project.
 - `hybrid_ai_system.py` - Hybrid AI system implementation
 - `llama_message.py` - Message formatting for Llama models
 - `llama_to_claude.py` - Communication bridge between Llama and Claude
+- `ai_communication/` - Additional AI communication scripts and examples
 
 ## Multi-Claude Support
 
