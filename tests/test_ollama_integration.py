@@ -1,134 +1,282 @@
 #!/usr/bin/env python3
 """
-Test the Ollama integration with Engram
-This script tests the integration between Ollama and Engram
+Test script for Ollama integration with Engram.
+
+This script tests the Ollama system prompts and communication capabilities.
 """
 
 import os
 import sys
-import time
-import unittest
+import argparse
 import subprocess
-import requests
-import json
-from unittest.mock import patch, MagicMock
+import time
+from datetime import datetime
 
-# Add the parent directory to the path so we can import from it
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(parent_dir)
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Test Ollama integration with Engram")
+    parser.add_argument("--model", type=str, default="llama3:8b", help="Ollama model to test")
+    parser.add_argument("--prompt-type", type=str, choices=["memory", "communication", "combined"], 
+                        default="combined", help="Type of system prompt to test")
+    parser.add_argument("--test-type", type=str, choices=["system", "memory", "communication", "all"], 
+                        default="all", help="Type of test to run")
+    return parser.parse_args()
 
-# Import the Ollama bridge module
-from ollama_bridge import MemoryHandler, call_ollama_api
-
-class TestOllamaIntegration(unittest.TestCase):
-    """Test the Ollama integration with Engram"""
+def test_system_prompts(model, prompt_type):
+    """Test system prompt generation."""
+    print(f"\n=== Testing System Prompts for {model} ({prompt_type}) ===\n")
     
-    def setUp(self):
-        """Set up the test environment"""
-        # Set the ENGRAM_CLIENT_ID environment variable
-        os.environ["ENGRAM_CLIENT_ID"] = "test-ollama"
-        self.memory = MemoryHandler()
-        
-        # Check if Ollama is running
-        self.ollama_running = False
-        try:
-            response = requests.get("http://localhost:11434/api/tags")
-            if response.status_code == 200:
-                self.ollama_running = True
-                
-                # Find an available model to use for testing
-                self.test_model = None
-                available_models = [model["name"] for model in response.json().get("models", [])]
-                
-                # Try to find a small model first, then fall back to any available model
-                preferred_models = ["llama3:8b", "mistral:7b", "gemma:2b", "tinyllama:1.1b"]
-                for model in preferred_models:
-                    if model in available_models:
-                        self.test_model = model
-                        break
-                
-                # If no preferred model found, use the first available model
-                if not self.test_model and available_models:
-                    self.test_model = available_models[0]
-                
-                print(f"Using Ollama model: {self.test_model}")
-        except:
-            print("Ollama is not running, skipping API tests")
-    
-    def test_memory_handler_instantiation(self):
-        """Test that the MemoryHandler can be instantiated"""
-        self.assertIsInstance(self.memory, MemoryHandler)
-    
-    @unittest.skipIf(not os.environ.get("ENGRAM_MEMORY_TEST"), "Skipping memory test")
-    def test_memory_store_retrieve(self):
-        """Test storing and retrieving memories"""
-        # Store a test memory
-        test_memory = "This is a test memory from the Ollama integration test"
-        result = self.memory.store_memory(test_memory)
-        self.assertIsNotNone(result)
-        
-        # Retrieve recent memories
-        recent = self.memory.get_recent_memories(1)
-        self.assertGreaterEqual(len(recent), 1)
-        
-        # Search for the test memory
-        search_results = self.memory.search_memories("test memory")
-        self.assertGreaterEqual(len(search_results), 1)
-    
-    def test_detect_memory_operations(self):
-        """Test detecting and executing memory operations in model output"""
-        # Mock the memory functions
-        with patch.object(MemoryHandler, 'store_memory', return_value={"id": "123"}), \
-             patch.object(MemoryHandler, 'search_memories', return_value=[{"content": "test"}]), \
-             patch.object(MemoryHandler, 'get_recent_memories', return_value=[{"content": "recent"}]):
-            
-            # Test a model output with a memory operation
-            model_output = "Here's what I know.\n\nREMEMBER: Important information to store\n\nAnd here's more."
-            cleaned_output, operations = self.memory.detect_memory_operations(model_output)
-            
-            # Check that the operation was detected and executed
-            self.assertEqual(len(operations), 1)
-            self.assertEqual(operations[0]["type"], "store")
-            self.assertEqual(operations[0]["input"], "Important information to store")
-            
-            # Check that the operation was removed from the output
-            self.assertNotIn("REMEMBER:", cleaned_output)
-            self.assertEqual(cleaned_output, "Here's what I know.\n\nAnd here's more.")
-    
-    @unittest.skipIf(not os.environ.get("ENGRAM_API_TEST"), "Skipping API test")
-    def test_ollama_api_call(self):
-        """Test calling the Ollama API"""
-        if not self.ollama_running or not self.test_model:
-            self.skipTest("Ollama is not running or no test model available")
-        
-        # Call the Ollama API
-        messages = [{"role": "user", "content": "Say hello"}]
-        response = call_ollama_api(
-            model=self.test_model, 
-            messages=messages,
-            temperature=0.5
+    try:
+        # Import the system prompt generator
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from ollama_system_prompts import (
+            get_memory_system_prompt,
+            get_communication_system_prompt,
+            get_combined_system_prompt,
+            get_model_capabilities
         )
         
-        # Check the response
-        self.assertIn("message", response)
-        self.assertIn("content", response["message"])
-        print(f"Ollama response: {response['message']['content'][:50]}...")
-    
-    def test_enhance_prompt_with_memory(self):
-        """Test enhancing a prompt with memory"""
-        with patch.object(MemoryHandler, 'get_semantic_memories', return_value=[{"content": "test memory"}]):
-            # Test enhancing a prompt that should trigger memory retrieval
-            user_input = "Do you remember what I told you about test memories?"
-            enhanced = self.memory.enhance_prompt_with_memory(user_input)
+        # Get model capabilities
+        capabilities = get_model_capabilities(model)
+        print(f"Model capabilities:")
+        print(f"- Memory commands: {', '.join(capabilities['memory_cmds'])}")
+        print(f"- Communication commands: {', '.join(capabilities['comm_cmds'])}")
+        print(f"- Vector support: {capabilities['supports_vector']}")
+        print(f"- Persona: {capabilities['persona']}")
+        
+        # Get the appropriate system prompt based on type
+        if prompt_type == "memory":
+            prompt = get_memory_system_prompt(model)
+        elif prompt_type == "communication":
+            prompt = get_communication_system_prompt(model)
+        else:  # combined
+            prompt = get_combined_system_prompt(model)
+        
+        # Print the prompt with line numbers
+        print("\nGenerated System Prompt:")
+        for i, line in enumerate(prompt.split('\n')):
+            print(f"{i+1:3d}| {line}")
             
-            # Check that the prompt was enhanced
-            self.assertIn("Here are some relevant memories", enhanced)
-            self.assertIn("test memory", enhanced)
-            self.assertIn(user_input, enhanced)
+        return True
+    except Exception as e:
+        print(f"Error testing system prompts: {e}")
+        return False
 
-def run_tests():
-    """Run the test suite"""
-    unittest.main()
+def test_memory_operations(model, prompt_type):
+    """Test memory operations with Ollama."""
+    print(f"\n=== Testing Memory Operations for {model} ===\n")
+    
+    try:
+        # Start the Engram memory service if not already running
+        try:
+            subprocess.run(["./engram_start.sh"], check=True, capture_output=True, text=True)
+            print("Started Engram memory service")
+        except subprocess.CalledProcessError:
+            print("Engram memory service already running or encountered an error")
+        
+        # Generate a test file with memory commands
+        test_file = f"test_ollama_memory_{int(time.time())}.txt"
+        with open(test_file, "w") as f:
+            f.write("Hello! I'm going to test my memory capabilities.\n\n")
+            f.write("REMEMBER: This is a test memory from the Ollama integration test.\n\n")
+            f.write("Now I'll search for memories about tests:\n")
+            f.write("SEARCH: test\n\n")
+            f.write("Let me list some recent memories:\n")
+            f.write("RETRIEVE: 3\n\n")
+            f.write("Let me try context retrieval:\n")
+            f.write("CONTEXT: integration testing\n\n")
+            f.write("I'll also try semantic search:\n")
+            f.write("SEMANTIC: system test\n\n")
+            f.write("I'll remember something else that should be forgotten:\n")
+            f.write("REMEMBER: Temporary test data to be deleted.\n\n")
+            f.write("Now I'll mark it to be forgotten:\n")
+            f.write("FORGET: Temporary test data\n\n")
+            f.write("That's the end of the memory test!")
+        
+        # Run the Ollama bridge with the test file as input
+        print("Running Ollama bridge with memory test")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        cmd = [
+            "python", os.path.join(script_dir, "ollama_bridge.py"), 
+            model, 
+            "--prompt-type", prompt_type,
+            "--memory-functions"
+        ]
+        
+        # Pass the test file as input
+        with open(test_file, "r") as f:
+            test_input = f.read()
+            
+        try:
+            # Start the process
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Wait for initialization
+            time.sleep(2)
+            
+            # Send "n" to skip including recent memories
+            proc.stdin.write("n\n")
+            proc.stdin.flush()
+            
+            # Wait a bit before sending test input
+            time.sleep(1)
+            
+            # Send each line of test input
+            for line in test_input.split('\n'):
+                proc.stdin.write(f"{line}\n")
+                proc.stdin.flush()
+                time.sleep(0.5)  # Give time for processing
+            
+            # Send exit command
+            proc.stdin.write("exit\n")
+            proc.stdin.flush()
+            
+            # Wait for response with timeout
+            try:
+                stdout, stderr = proc.communicate(timeout=60)
+                print("\nOutput from Ollama bridge:")
+                print(stdout)
+                if stderr:
+                    print("\nErrors:")
+                    print(stderr)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                print("Process timed out, killed")
+                stdout, stderr = proc.communicate()
+        
+        except Exception as e:
+            print(f"Error running Ollama bridge: {e}")
+            return False
+        
+        # Clean up
+        try:
+            os.remove(test_file)
+        except:
+            pass
+        
+        return True
+    except Exception as e:
+        print(f"Error testing memory operations: {e}")
+        return False
+
+def test_communication(model, prompt_type):
+    """Test communication between Ollama and Claude."""
+    print(f"\n=== Testing Communication for {model} ===\n")
+    
+    try:
+        # Generate a test file with communication commands
+        test_file = f"test_ollama_comm_{int(time.time())}.txt"
+        with open(test_file, "w") as f:
+            f.write("Hello! I'm going to test my communication capabilities.\n\n")
+            f.write("SEND TO Claude: Hello Claude! This is a test message from the Ollama integration test.\n\n")
+            f.write("Now I'll check for messages from Claude:\n")
+            f.write("CHECK MESSAGES FROM Claude\n\n")
+            f.write("I'll send a reply to Claude:\n")
+            f.write("REPLY TO Claude: Thanks for any response you've sent. This is a follow-up message in our test conversation.\n\n")
+            f.write("Finally, I'll try broadcasting a message to all AIs:\n")
+            f.write("BROADCAST: This is a broadcast test message to all available AI models.\n\n")
+            f.write("That's the end of the communication test!")
+        
+        # Run the Ollama bridge with the test file as input
+        print("Running Ollama bridge with communication test")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        cmd = [
+            "python", os.path.join(script_dir, "ollama_bridge.py"), 
+            model, 
+            "--prompt-type", prompt_type,
+            "--memory-functions",
+            "--available-models", "Claude", "Echo", "Mix"
+        ]
+        
+        # Pass the test file as input
+        with open(test_file, "r") as f:
+            test_input = f.read()
+            
+        try:
+            # Start the process
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Wait for initialization
+            time.sleep(2)
+            
+            # Send "n" to skip including recent memories
+            proc.stdin.write("n\n")
+            proc.stdin.flush()
+            
+            # Wait a bit before sending test input
+            time.sleep(1)
+            
+            # Send each line of test input
+            for line in test_input.split('\n'):
+                proc.stdin.write(f"{line}\n")
+                proc.stdin.flush()
+                time.sleep(0.5)  # Give time for processing
+            
+            # Send exit command
+            proc.stdin.write("exit\n")
+            proc.stdin.flush()
+            
+            # Wait for response with timeout
+            try:
+                stdout, stderr = proc.communicate(timeout=60)
+                print("\nOutput from Ollama bridge:")
+                print(stdout)
+                if stderr:
+                    print("\nErrors:")
+                    print(stderr)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                print("Process timed out, killed")
+                stdout, stderr = proc.communicate()
+        
+        except Exception as e:
+            print(f"Error running Ollama bridge: {e}")
+            return False
+        
+        # Clean up
+        try:
+            os.remove(test_file)
+        except:
+            pass
+        
+        return True
+    except Exception as e:
+        print(f"Error testing communication: {e}")
+        return False
+
+def main():
+    """Main function."""
+    args = parse_args()
+    
+    # Track test results
+    results = {}
+    
+    # Run tests based on the test type
+    if args.test_type in ["system", "all"]:
+        results["system"] = test_system_prompts(args.model, args.prompt_type)
+    
+    if args.test_type in ["memory", "all"]:
+        results["memory"] = test_memory_operations(args.model, args.prompt_type)
+    
+    if args.test_type in ["communication", "all"]:
+        results["communication"] = test_communication(args.model, args.prompt_type)
+    
+    # Display summary
+    print("\n=== Test Summary ===")
+    for test, result in results.items():
+        print(f"{test}: {'PASS' if result else 'FAIL'}")
 
 if __name__ == "__main__":
-    run_tests()
+    main()

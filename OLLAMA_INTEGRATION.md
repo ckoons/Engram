@@ -11,7 +11,7 @@ To use Ollama with Engram:
 ./engram_with_ollama_direct --model llama3:8b
 
 # Virtual environment approach with FAISS:
-./setup_ollama_env_with_faiss.sh  # Run once to create environment
+./utils/setup_ollama_env_with_faiss.sh  # Run once to create environment
 ./engram_with_ollama_faiss --model llama3:8b
 
 # Original approach (requires NumPy 1.x):
@@ -129,7 +129,7 @@ The Ollama integration consists of several components:
 1. **ollama_bridge.py**: Core integration connecting Ollama API to Engram
 2. **ollama_system_prompts.py**: Generates standardized system prompts
 3. **engram_with_ollama_direct**: Recommended launcher script (FAISS via runtime patch)
-4. **engram_memory_patch.py**: Runtime patcher for FAISS integration
+4. **utils/engram_memory_patch.py**: Runtime patcher for FAISS integration
 5. **engram_with_ollama_faiss**: Alternative launcher script (FAISS via virtual environment)
 6. **engram_with_ollama**: Original launcher script (ChromaDB or file-based fallback)
 
@@ -165,7 +165,7 @@ If you encounter issues:
    
    - **Virtual Environment FAISS solution**:
      ```bash
-     ./setup_ollama_env_with_faiss.sh  # Run once to set up
+     ./utils/setup_ollama_env_with_faiss.sh  # Run once to set up
      ./engram_with_ollama_faiss --model llama3:8b
      ```
    - This creates a dedicated virtual environment with FAISS

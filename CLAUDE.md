@@ -81,13 +81,13 @@ cd ~/projects/github/Engram
 ./engram_check.py --start
 
 # Test vector database integration
-./vector_db_setup.py --test
+./utils/vector_db_setup.py --test
 
 # Fix NumPy compatibility issues with vector database
-./vector_db_setup.py --fix-numpy
+./utils/vector_db_setup.py --fix-numpy
 
 # Install vector database dependencies
-./vector_db_setup.py --install
+./utils/vector_db_setup.py --install
 
 # Run tests
 cd ~/projects/github/Engram

@@ -256,7 +256,7 @@ start_engram_services() {
                 if grep -q "faiss" "$ERROR_LOG" || grep -q "vector_store" "$ERROR_LOG" || grep -q "numpy" "$ERROR_LOG"; then
                     echo -e "${RED}Vector database dependency issue detected${RESET}"
                     echo -e "${YELLOW}To fix vector database integration, run:${RESET}"
-                    echo -e "${GREEN}cd $ENGRAM_DIR && python vector_db_setup.py --install${RESET}"
+                    echo -e "${GREEN}cd $ENGRAM_DIR && python utils/vector_db_setup.py --install${RESET}"
                     echo -e "${YELLOW}For now, memory will run without vector database capabilities${RESET}"
                     echo -e "${YELLOW}Starting in fallback mode...${RESET}"
                     
