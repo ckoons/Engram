@@ -120,6 +120,13 @@ else
   GPU_FLAG=""
 fi
 
-# Execute the Python script
-cd "$SCRIPT_DIR"
-python3 engram_with_faiss_simple.py --model "$MODEL" --client-id "$CLIENT_ID" --vector-dimension "$VECTOR_DIM" $GPU_FLAG
+# Execute the Python script - use absolute paths to avoid directory issues
+FAISS_SCRIPT="$SCRIPT_DIR/vector/test/engram_with_faiss_simple.py"
+
+if [ ! -f "$FAISS_SCRIPT" ]; then
+  echo "❌ Error: FAISS script not found at $FAISS_SCRIPT"
+  exit 1
+fi
+
+echo "🔄 Running FAISS script: $FAISS_SCRIPT"
+python3 "$FAISS_SCRIPT" --model "$MODEL" --client-id "$CLIENT_ID" --vector-dimension "$VECTOR_DIM" $GPU_FLAG

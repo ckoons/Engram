@@ -146,44 +146,59 @@ await process_message("Let's discuss the structured memory implementation", is_u
 await auto_remember("The structured memory system uses importance levels from 1 to 5")
 ```
 
-## Latest Updates (March 21, 2025 - v0.8.0)
+## Latest Updates (March 23, 2025 - v0.8.2)
 
-### System Improvements
+### Vector Database Improvements
 
 1. **FAISS Vector Database Integration**:
-   - Replaced ChromaDB with FAISS for vector storage
-   - Created deterministic embedding approach that doesn't require external models
-   - Ensured NumPy 2.x compatibility for all vector operations
-   - Enhanced error handling with graceful fallback to file-based storage
-   - Simplified dependency management with fewer requirements
+   - Successfully integrated FAISS 1.10.0 with NumPy 2.x compatibility
+   - Created comprehensive test suite for FAISS verification
+   - Implemented GPU detection and support via `install_faiss_gpu.py`
+   - Improved error handling with graceful fallback to file-based storage
+   - Resolved path resolution issues in launcher scripts
+   - Added detailed documentation and troubleshooting guide in `vector/README.md`
 
-2. **CMB Package Removal**:
-   - Completely removed the `cmb/` directory
-   - Provided `cmb_compat.py` compatibility layer for legacy code
-   - Updated all imports in tests, examples, and scripts
-   - Ensured environment variables follow ENGRAM_* naming convention
-   - Updated documentation with complete migration details
+2. **LanceDB Integration (In Progress)**:
+   - Added initial structure for LanceDB support in `vector/lancedb/`
+   - Researched cross-platform compatibility (Apple Silicon + CUDA)
+   - Planning adapter layer for multiple vector database backends
+   - Exploring Arrow-based vector operations for performance
+   - Preliminary comparison testing with FAISS implementation
 
-3. **Ollama Integration**:
-   - Enhanced Ollama bridge with improved memory function detection
-   - Added communication capabilities between AI models
-   - Implemented standardized system prompts for different Ollama models
-   - Created model-specific personas (Echo, Mist, Mix, Phi)
-   - Added direct FAISS launcher for Ollama integration
+3. **Ollama Integration Enhancements**:
+   - Fixed input handling in Ollama-FAISS integration
+   - Added improved logging for memory operations
+   - Enhanced error recovery during chat sessions
+   - Fixed path resolution for cross-directory script execution
+   - Added memory tagging with source model information
+   - Improved session management for vector search results
 
 ### Implementation Status
 
-As of March 21, 2025, Engram has been completely migrated to use FAISS for vector database operations, ensuring compatibility with NumPy 2.x while maintaining all core functionalities:
+As of March 23, 2025, Engram has fully operational FAISS vector database integration with several key improvements:
 
-- Storage and retrieval of memories works in all implementations
-- Semantic search with proper relevance scoring via FAISS
-- Context-aware memory loading functions correctly
-- Structured memory and Nexus interfaces operate as expected
-- Memory compartmentalization and expiration controls work in all modes
-- AI-to-AI communication capabilities via standardized memory format
-- Compatibility layer for legacy code using the old 'cmb' namespace
+- **Cross-Platform Support**: 
+  - CPU version working on all platforms
+  - GPU detection for appropriate CUDA version when available
+  - Testing on MacOS with Apple Silicon
 
-When the vector database components are available, the system will automatically use FAISS for enhanced semantic retrieval. When unavailable, the system automatically falls back to file-based storage with keyword matching, with clear logging of the fallback status.
+- **Core Functionality**:
+  - Vector-based semantic search with proper relevance scoring
+  - Simple deterministic embedding that works without external models
+  - Automatic fallback to file-based storage when needed
+  - Complete adapter layer for Engram memory system
+
+- **Performance**:
+  - FAISS provides efficient similarity search capabilities
+  - Lightweight embedding generation for resource-constrained environments
+  - Fast startup and initialization times
+
+- **Stability**:
+  - Comprehensive error handling and recovery
+  - Graceful degradation when vector features unavailable
+  - Full test suite for verification of functionality
+
+Plans are underway to integrate LanceDB as an additional vector database option, which will provide even better Apple Silicon support while maintaining CUDA compatibility on other platforms.
 
 ## Future Enhancements
 

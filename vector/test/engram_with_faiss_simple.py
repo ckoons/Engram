@@ -74,7 +74,7 @@ def patch_memory_module() -> bool:
             sys.path.insert(0, engram_dir)
         
         # Find our adapter module
-        adapter_path = os.path.join(os.getcwd(), "engram_memory_adapter.py")
+        adapter_path = os.path.join(os.path.dirname(__file__), "engram_memory_adapter.py")
         if not os.path.exists(adapter_path):
             logger.error(f"Memory adapter module not found at: {adapter_path}")
             return False
@@ -206,12 +206,36 @@ def main():
                 print(f"Error communicating with Ollama API: {e}")
                 return {"error": str(e)}
         
-        # Main chat loop
+        # Main chat loop with improved input handling
+        import sys
+        import select
+        import time
+        
+        print("\nEnter your messages below. Type 'exit' or '/quit' to quit.")
+        print("Press Ctrl+C to interrupt the chat.\n")
+        
+        # Set up polling for better input handling
+        poll_obj = select.poll()
+        poll_obj.register(sys.stdin, select.POLLIN)
+        
         while True:
             try:
-                # Get user input
-                user_input = input("\nYou: ")
+                # Display prompt and flush to ensure it's visible
+                sys.stdout.write("\nYou: ")
+                sys.stdout.flush()
                 
+                # Use polling with timeout to avoid blocking indefinitely
+                if poll_obj.poll(100):  # 100ms timeout
+                    user_input = sys.stdin.readline().strip()
+                else:
+                    # No input available yet, continue polling
+                    time.sleep(0.1)
+                    continue
+                
+                # Check for empty input
+                if not user_input:
+                    continue
+                    
                 # Check for exit command
                 if user_input.lower() in ["exit", "quit", "/quit", "/exit"]:
                     print("Exiting chat.")
@@ -219,6 +243,9 @@ def main():
                 
                 # Add to chat history
                 chat_history.append({"role": "user", "content": user_input})
+                
+                # Provide feedback that we're processing
+                print(f"Processing your request with {args.model}...")
                 
                 # Call Ollama API
                 system = f"You are helpful assistant with access to memory storage through the Engram system with client ID {args.client_id}."
@@ -233,11 +260,16 @@ def main():
                     
                     # Store in memory if content is substantial
                     if len(user_input) > 10 and len(assistant_message) > 30:
-                        memory_service.store(
-                            f"User: {user_input}\nAssistant: {assistant_message[:100]}...",
-                            compartment_id="conversations", 
-                            metadata={"source": args.model}
-                        )
+                        try:
+                            memory_service.store(
+                                f"User: {user_input}\nAssistant: {assistant_message[:100]}...",
+                                compartment_id="conversations", 
+                                metadata={"source": args.model}
+                            )
+                            # Log successful memory storage
+                            logger.info(f"Stored conversation in memory")
+                        except Exception as mem_err:
+                            logger.error(f"Failed to store in memory: {str(mem_err)}")
                 else:
                     print("Error: No response from model")
             
@@ -246,6 +278,9 @@ def main():
                 break
             except Exception as e:
                 print(f"Error: {str(e)}")
+                logger.error(f"Chat error: {str(e)}")
+                # Brief pause before continuing to prevent error flooding
+                time.sleep(1)
         
     except Exception as e:
         logger.error(f"Failed to run Ollama bridge: {str(e)}")
