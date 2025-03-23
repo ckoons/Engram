@@ -1,12 +1,13 @@
 #!/bin/bash
 # engram_with_claude.sh
-# Launch Claude Code with maximum freedom and Engram memory services
+# Launch Claude Code with Engram memory services and smart vector database detection
 # Created: March 15, 2025
-# Updated: March 19, 2025 - Removed legacy cmb namespace support
+# Updated: March 23, 2025 - Added smart vector database detection
 
 # Parse command line arguments
 CLIENT_ID="claude"
 MEMORY_ONLY=false
+USE_SMART_DETECTION=true
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -19,12 +20,18 @@ while [[ $# -gt 0 ]]; do
       MEMORY_ONLY=true
       shift
       ;;
+    --fallback)
+      USE_SMART_DETECTION=false
+      export ENGRAM_USE_FALLBACK=1
+      shift
+      ;;
     --help)
       echo "Usage: engram_with_claude [OPTIONS]"
       echo ""
       echo "Options:"
       echo "  --client-id NAME    Set a specific client ID (default: claude)"
       echo "  --memory-only       Only start the memory service, don't launch Claude"
+      echo "  --fallback          Use file-based memory (no vector database)"
       echo "  --help              Show this help message"
       echo ""
       echo "Examples:"
@@ -49,6 +56,10 @@ RED="\033[91m"
 BOLD="\033[1m"
 RESET="\033[0m"
 
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 # Find the Engram installation directory
 # First try to find it using pip
 ENGRAM_PKG_DIR=$(python -c "import engram; print(engram.__path__[0])" 2>/dev/null)
@@ -57,9 +68,9 @@ if [ -n "$ENGRAM_PKG_DIR" ]; then
   ENGRAM_DIR=$(dirname "$ENGRAM_PKG_DIR")
   echo -e "${GREEN}Found Engram installation via pip at: $ENGRAM_DIR${RESET}"
 else
-  # Fall back to the default location
-  ENGRAM_DIR="$HOME/projects/github/Engram"
-  echo -e "${YELLOW}Using default Engram location: $ENGRAM_DIR${RESET}"
+  # Use our current directory
+  ENGRAM_DIR="$SCRIPT_DIR"
+  echo -e "${YELLOW}Using current directory for Engram: $ENGRAM_DIR${RESET}"
 fi
 
 # Handle virtual environment in the Engram directory
@@ -71,6 +82,60 @@ else
   echo -e "${YELLOW}No Engram virtual environment found, using system Python${RESET}"
   # Add Engram directory to Python path for direct imports
   export PYTHONPATH="$ENGRAM_DIR:$PYTHONPATH"
+fi
+
+# Make helper scripts executable
+chmod +x "$SCRIPT_DIR/utils/detect_best_vector_db.py" 2>/dev/null
+
+# Detect best vector database if smart detection is enabled
+if [ "$USE_SMART_DETECTION" = true ]; then
+    echo -e "${BLUE}Detecting optimal vector database...${RESET}"
+    
+    if [ -f "$SCRIPT_DIR/utils/detect_best_vector_db.py" ]; then
+        # Run detection script to determine the best DB
+        DB_INFO=$(python "$SCRIPT_DIR/utils/detect_best_vector_db.py" --quiet)
+        DB_AVAILABLE=$?
+        
+        if [ $DB_AVAILABLE -eq 0 ] && [ -n "$DB_INFO" ]; then
+            # Extract the database name from the path
+            DB_NAME=$(basename "$DB_INFO" | sed 's/engram_with_//' | sed 's/_ollama//' | sed 's/_faiss//' | sed 's/_lancedb//')
+            
+            if [[ "$DB_INFO" == *"lancedb"* ]]; then
+                echo -e "${GREEN}Using LanceDB vector database (optimal for your hardware)${RESET}"
+                export ENGRAM_USE_VECTORDB=lancedb
+                export ENGRAM_USE_FALLBACK=0
+            elif [[ "$DB_INFO" == *"faiss"* ]]; then
+                echo -e "${GREEN}Using FAISS vector database (optimal for your hardware)${RESET}"
+                export ENGRAM_USE_VECTORDB=faiss
+                export ENGRAM_USE_FALLBACK=0
+            else
+                echo -e "${YELLOW}No optimal vector database detected, using file-based memory${RESET}"
+                export ENGRAM_USE_FALLBACK=1
+            fi
+        else
+            echo -e "${YELLOW}Vector database detection failed, using file-based memory${RESET}"
+            export ENGRAM_USE_FALLBACK=1
+        fi
+    else
+        echo -e "${YELLOW}Vector database detection script not found, using file-based memory${RESET}"
+        export ENGRAM_USE_FALLBACK=1
+    fi
+    
+    # For LanceDB, set up hardware-specific optimizations
+    if [ "$ENGRAM_USE_VECTORDB" = "lancedb" ]; then
+        # Check for Apple Silicon for Metal optimizations
+        if [[ "$(uname -m)" == "arm64" ]] && [[ "$(uname -s)" == "Darwin" ]]; then
+            echo -e "${GREEN}Running on Apple Silicon, optimizing for Metal...${RESET}"
+            export LANCEDB_USE_METAL=1
+        fi
+
+        # Check for CUDA for optimizations
+        CUDA_AVAILABLE=$(python -c "import torch; print(torch.cuda.is_available())" 2>/dev/null)
+        if [ "$CUDA_AVAILABLE" == "True" ]; then
+            echo -e "${GREEN}CUDA detected, enabling GPU acceleration...${RESET}"
+            export LANCEDB_USE_CUDA=1
+        fi
+    fi
 fi
 
 # Engram paths
@@ -132,6 +197,16 @@ except ImportError as e:
     print(f\"${RED}❌ Failed to import memory functions from engram package: {e}${RESET}\")
     print(\"${RED}❌ Claude will run without memory capabilities${RESET}\")
     sys.exit(1)
+
+# Display vector database information
+if os.environ.get('ENGRAM_USE_FALLBACK') == '1':
+    print(f\"${YELLOW}Using file-based memory (fallback mode)${RESET}\")
+else:
+    vectordb = os.environ.get('ENGRAM_USE_VECTORDB', 'faiss')
+    if vectordb == 'lancedb':
+        print(f\"${GREEN}Using LanceDB vector database${RESET}\")
+    else:
+        print(f\"${GREEN}Using FAISS vector database${RESET}\")
 
 # Check memory service status
 try:
@@ -245,7 +320,7 @@ start_engram_services() {
         
         # Run with output capture to file
         # Pass our environment variable to the startup script
-        if [ "$VECTOR_DB_AVAILABLE" = false ]; then
+        if [ "$ENGRAM_USE_FALLBACK" = "1" ]; then
             echo -e "${BLUE}Executing:${RESET} $ENGRAM_STARTUP --client-id server --data-dir $HOME/.engram --fallback"
             # First attempt with explicit fallback mode
             "$ENGRAM_STARTUP" --client-id "server" --data-dir "$HOME/.engram" --fallback >$ERROR_LOG 2>&1 &
@@ -353,23 +428,6 @@ else
     echo -e "${GREEN}All essential packages are installed.${RESET}"
 fi
 
-# Check for vector database packages
-VECTOR_DB_AVAILABLE=true
-echo -e "${BLUE}Checking for vector database dependencies...${RESET}"
-
-if ! python -c "import faiss" >/dev/null 2>&1; then
-    echo -e "${YELLOW}Package faiss is not installed - vector search will not be available${RESET}"
-    VECTOR_DB_AVAILABLE=false
-    export ENGRAM_USE_FALLBACK=1
-else
-    echo -e "${GREEN}Vector database dependencies are installed.${RESET}"
-    # Ensure we're not using fallback mode
-    export ENGRAM_USE_FALLBACK=0
-    
-    # Note: FAISS works with NumPy 2.x, so no version check needed
-    echo -e "${GREEN}FAISS vector database is compatible with all NumPy versions${RESET}"
-fi
-
 # Check if services are running
 check_engram_running
 status=$?
@@ -399,6 +457,17 @@ fi
 if [ "$MEMORY_ONLY" = true ]; then
     echo -e "${GREEN}${BOLD}Memory services are ready. Not launching Claude (--memory-only was specified).${RESET}"
     exit 0
+fi
+
+# Display vector database information
+if [ "$ENGRAM_USE_FALLBACK" = "1" ]; then
+    echo -e "${YELLOW}${BOLD}Memory system:${RESET} File-based (fallback mode)"
+else
+    if [ "$ENGRAM_USE_VECTORDB" = "lancedb" ]; then
+        echo -e "${GREEN}${BOLD}Memory system:${RESET} LanceDB vector database"
+    else
+        echo -e "${GREEN}${BOLD}Memory system:${RESET} FAISS vector database"
+    fi
 fi
 
 # Launch Claude with maximum freedom

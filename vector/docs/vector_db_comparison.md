@@ -6,13 +6,13 @@ This document compares FAISS and LanceDB implementations for Engram's vector dat
 
 | Feature | FAISS | LanceDB |
 |---------|-------|---------|
-| **Implementation Status** | Complete | Planned |
+| **Implementation Status** | ✅ Complete | ✅ Complete |
 | **Apple Silicon Support** | ⚠️ CPU only | ✅ Native |
 | **CUDA Support** | ✅ Excellent | ✅ Good |
 | **NumPy Compatibility** | ✅ Works with 2.x | ✅ Works with 2.x |
 | **Performance (small DB)** | ✅ Fast | ✅ Fast |
 | **Performance (large DB)** | ✅ Very fast with GPU | ✅ Very fast |
-| **Embeddings Included** | ✅ Simple deterministic | ❌ Requires external |
+| **Embeddings Included** | ✅ Simple deterministic | ✅ Simple deterministic |
 | **Disk Format** | ✅ Custom binary | ✅ Arrow-based |
 | **Dependencies** | ✅ Minimal | ⚠️ More dependencies |
 | **Maturity** | ✅ Very mature | ⚠️ Newer project |
@@ -33,7 +33,7 @@ This document compares FAISS and LanceDB implementations for Engram's vector dat
 - Index format is binary and not easily inspected
 - Less integrated with modern data tools like Arrow
 
-### LanceDB (Planned Implementation)
+### LanceDB (Implemented)
 
 **Strengths:**
 - Native support for Apple Silicon (including GPU acceleration via Metal)
@@ -44,9 +44,9 @@ This document compares FAISS and LanceDB implementations for Engram's vector dat
 
 **Limitations:**
 - Relatively newer project with less maturity
-- Requires more dependencies (Arrow, etc.)
-- May need external embedding models for optimal performance
+- Requires more dependencies (Arrow, PyArrow)
 - Less specialized for pure ANN search compared to FAISS
+- Documentation not as comprehensive as FAISS
 
 ## Performance Considerations
 
@@ -62,7 +62,7 @@ For large collections, GPU acceleration becomes important:
 
 ## Integration Strategy
 
-Rather than choosing one solution exclusively, Engram will implement a flexible adapter layer that can use different backends:
+Rather than choosing one solution exclusively, Engram implements a flexible adapter layer that can use different backends:
 
 1. **Unified API**: Common interface for all vector database operations
 2. **Auto-detection**: Automatically select the optimal backend based on hardware
@@ -70,26 +70,47 @@ Rather than choosing one solution exclusively, Engram will implement a flexible 
 
 This approach provides the best performance across different platforms while maintaining a consistent API.
 
-## Implementation Timeline
+## Implementation Status
 
 ### Phase 1: FAISS Integration (Completed)
-- Basic implementation with CPU support
-- Test suite and verification
-- Documentation and troubleshooting guide
+- ✅ Basic implementation with CPU support
+- ✅ GPU support where available
+- ✅ Test suite and verification
+- ✅ Documentation and troubleshooting guide
 
-### Phase 2: LanceDB Integration (In Progress)
-- Initial research and design
-- Adapter interface implementation
-- Basic functionality testing
+### Phase 2: LanceDB Integration (Completed)
+- ✅ Initial research and design
+- ✅ Adapter interface implementation
+- ✅ Vector store implementation
+- ✅ Cross-platform optimization
+- ✅ Test script and verification
 
-### Phase 3: Unified Vector Layer (Planned)
-- Common API for both backends
-- Automatic backend selection
-- Performance benchmarking and tuning
-- Documentation updates
+### Phase 3: Unified Vector Layer (In Progress)
+- ✅ Common API for both backends
+- ✅ Interchangeable adapters
+- ⚠️ Automatic backend selection (partially implemented)
+- ⚠️ Performance benchmarking and tuning (planned)
+- ✅ Documentation updates
+
+## Usage Recommendations
+
+Based on our implementation and testing:
+
+- **Apple Silicon (M1/M2/M3)**: Use LanceDB for best performance
+- **NVIDIA GPUs**: Use FAISS for maximum performance
+- **CPU-only systems**: Either backend works well; FAISS for smaller datasets, LanceDB for larger ones
+- **Development work**: LanceDB offers better inspectability of data
+- **Production deployment**: Choose based on hardware platform
+
+## Launcher Scripts
+
+Engram provides dedicated launcher scripts for each backend:
+
+- `engram_with_ollama_faiss`: Uses FAISS with Ollama integration
+- `engram_with_lancedb`: Uses LanceDB (automatically detects and optimizes for platform)
 
 ## Conclusion
 
 Both FAISS and LanceDB offer compelling advantages for Engram's vector database needs. FAISS provides excellent performance and maturity, while LanceDB offers better cross-platform support, especially for Apple Silicon.
 
-By implementing both backends with a unified API, Engram can provide optimal performance across different hardware platforms while maintaining a consistent developer experience.
+By implementing both backends with a unified API, Engram provides optimal performance across different hardware platforms while maintaining a consistent developer experience.

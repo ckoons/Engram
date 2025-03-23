@@ -10,6 +10,7 @@ import os
 import sys
 import logging
 import time
+import json
 from typing import List, Dict, Any, Optional, Union
 from pathlib import Path
 
@@ -23,6 +24,14 @@ ENGRAM_DIR = str(Path(__file__).parent.parent.parent)
 if ENGRAM_DIR not in sys.path:
     sys.path.insert(0, ENGRAM_DIR)
     logger.debug(f"Added {ENGRAM_DIR} to Python path")
+
+# Import vector_store module once it's created
+try:
+    from vector.lancedb.vector_store import VectorStore
+    logger.info("Imported LanceDB vector store")
+except ImportError:
+    logger.warning("LanceDB vector store module not found")
+    VectorStore = None
 
 class LanceDBAdapter:
     """
@@ -51,9 +60,50 @@ class LanceDBAdapter:
         self.vector_dimension = vector_dimension
         self.use_gpu = use_gpu
         
-        # TODO: Initialize LanceDB when implemented
-        logger.info(f"LanceDB adapter initialized (PLACEHOLDER)")
-        logger.warning("LanceDB integration is not yet implemented")
+        # Initialize LanceDB vector store
+        if VectorStore:
+            try:
+                # Ensure directory exists
+                vector_path = os.path.join(memory_dir, "lancedb")
+                os.makedirs(vector_path, exist_ok=True)
+                
+                # Create vector store with absolute path
+                self.vector_store = VectorStore(
+                    data_path=os.path.abspath(vector_path),
+                    dimension=vector_dimension,
+                    use_gpu=use_gpu
+                )
+                
+                # Verify connection by calling a method
+                _ = self.vector_store.get_compartments()
+                
+                logger.info(f"LanceDB adapter initialized with vector_dimension={vector_dimension}")
+            except Exception as e:
+                logger.error(f"Error initializing LanceDB vector store: {e}")
+                # Try alternative initialization as fallback
+                try:
+                    self.vector_store = VectorStore(
+                        data_path=memory_dir,
+                        dimension=vector_dimension,
+                        use_gpu=use_gpu
+                    )
+                    logger.info("LanceDB adapter initialized with fallback approach")
+                except Exception as fallback_error:
+                    logger.error(f"Fallback initialization failed: {fallback_error}")
+                    self.vector_store = None
+        else:
+            logger.error("Failed to initialize LanceDB adapter: missing VectorStore class")
+            self.vector_store = None
+    
+    def _ensure_compartment(self, compartment_id: str) -> None:
+        """Ensure the compartment exists"""
+        if not self.vector_store:
+            return
+            
+        if compartment_id not in self.vector_store.get_compartments():
+            # Create compartment if it doesn't exist
+            self.vector_store.create_compartment(compartment_id)
+            logger.info(f"Created new compartment: {compartment_id}")
     
     def store(self, 
               memory_text: str, 
@@ -70,10 +120,28 @@ class LanceDBAdapter:
         Returns:
             ID of the stored memory
         """
-        # TODO: Implement LanceDB storage
-        logger.info(f"Memory storage requested (PLACEHOLDER): {memory_text[:30]}...")
-        memory_id = int(time.time())
-        return memory_id
+        if not self.vector_store:
+            logger.error("Cannot store memory: Vector store not initialized")
+            return -1
+            
+        if not metadata:
+            metadata = {}
+            
+        # Ensure compartment exists
+        self._ensure_compartment(compartment_id)
+        
+        # Store the memory
+        ids = self.vector_store.add(
+            compartment=compartment_id,
+            texts=[memory_text],
+            metadatas=[metadata]
+        )
+        
+        # Save the compartment
+        self.vector_store.save(compartment_id)
+        
+        logger.info(f"Stored memory in compartment '{compartment_id}' with ID {ids[0]}")
+        return ids[0]
     
     def search(self, 
                query: str, 
@@ -90,9 +158,22 @@ class LanceDBAdapter:
         Returns:
             List of matching memories
         """
-        # TODO: Implement LanceDB search
-        logger.info(f"Memory search requested (PLACEHOLDER): {query}")
-        return []
+        if not self.vector_store:
+            logger.error("Cannot search: Vector store not initialized")
+            return []
+            
+        # Ensure compartment exists
+        self._ensure_compartment(compartment_id)
+        
+        # Perform text search (exact match)
+        results = self.vector_store.text_search(
+            query=query,
+            compartment=compartment_id,
+            top_k=limit
+        )
+        
+        logger.info(f"Searched for '{query}' in compartment '{compartment_id}', found {len(results)} results")
+        return results
     
     def semantic_search(self, 
                         query: str, 
@@ -109,20 +190,38 @@ class LanceDBAdapter:
         Returns:
             List of matching memories with similarity scores
         """
-        # TODO: Implement LanceDB semantic search
-        logger.info(f"Semantic search requested (PLACEHOLDER): {query}")
-        return []
+        if not self.vector_store:
+            logger.error("Cannot perform semantic search: Vector store not initialized")
+            return []
+            
+        # Ensure compartment exists
+        self._ensure_compartment(compartment_id)
+        
+        # Perform semantic search
+        results = self.vector_store.vector_search(
+            query=query,
+            compartment=compartment_id,
+            top_k=limit
+        )
+        
+        logger.info(f"Semantic search for '{query}' in compartment '{compartment_id}', found {len(results)} results")
+        return results
     
     def get_compartments(self) -> List[str]:
         """Get all compartment IDs."""
-        # TODO: Implement LanceDB compartment listing
-        return ["default"]
+        if not self.vector_store:
+            logger.error("Cannot get compartments: Vector store not initialized")
+            return []
+            
+        return self.vector_store.get_compartments()
     
     def delete_compartment(self, compartment_id: str) -> bool:
         """Delete a compartment."""
-        # TODO: Implement LanceDB compartment deletion
-        logger.info(f"Compartment deletion requested (PLACEHOLDER): {compartment_id}")
-        return True
+        if not self.vector_store:
+            logger.error("Cannot delete compartment: Vector store not initialized")
+            return False
+            
+        return self.vector_store.delete(compartment_id)
     
     def get_memory_by_id(self, 
                          memory_id: int, 
@@ -137,9 +236,25 @@ class LanceDBAdapter:
         Returns:
             The memory if found, None otherwise
         """
-        # TODO: Implement LanceDB memory retrieval by ID
-        logger.info(f"Memory retrieval requested (PLACEHOLDER): {memory_id}")
-        return None
+        if not self.vector_store:
+            logger.error("Cannot get memory by ID: Vector store not initialized")
+            return None
+            
+        # Ensure compartment exists
+        self._ensure_compartment(compartment_id)
+        
+        # Get memory by ID
+        memory = self.vector_store.get_by_id(
+            memory_id=memory_id,
+            compartment=compartment_id
+        )
+        
+        if memory:
+            logger.info(f"Retrieved memory with ID {memory_id} from compartment '{compartment_id}'")
+        else:
+            logger.warning(f"Memory with ID {memory_id} not found in compartment '{compartment_id}'")
+            
+        return memory
 
 # Integration with Engram memory system
 def install_lancedb_adapter():
@@ -153,11 +268,41 @@ def install_lancedb_adapter():
         True if installation was successful, False otherwise
     """
     try:
+        # Import Engram memory module
         from engram.core import memory
         
-        # Placeholder for future implementation
-        logger.warning("LanceDB adapter installation not yet implemented")
-        return False
+        # Check if LanceDB is available
+        try:
+            import lancedb
+            import pyarrow
+            logger.info(f"Using LanceDB version {lancedb.__version__} with PyArrow {pyarrow.__version__}")
+        except ImportError as e:
+            logger.error(f"LanceDB installation not found: {e}")
+            logger.error("Please run vector/lancedb/install.py to install LanceDB")
+            return False
+        
+        # Create the adapter
+        adapter = LanceDBAdapter()
+        
+        # Override the MemoryService class instead of looking for get_memory_service function
+        # Store the original class for later reference
+        original_memory_service = memory.MemoryService
+        
+        # Replace the memory service class with our LanceDB adapter
+        memory.MemoryService = LanceDBAdapter
+        
+        # Update the module's variables to indicate vector database availability
+        memory.HAS_VECTOR_DB = True
+        memory.VECTOR_DB_NAME = "lancedb"
+        memory.VECTOR_DB_VERSION = lancedb.__version__
+        
+        # Set environment variable to ensure we're not in fallback mode
+        import os
+        os.environ['ENGRAM_USE_FALLBACK'] = "0"
+        
+        logger.info("Successfully installed LanceDB adapter")
+        return True
+        
     except Exception as e:
         logger.error(f"Failed to install LanceDB adapter: {e}")
         return False
@@ -165,12 +310,22 @@ def install_lancedb_adapter():
 if __name__ == "__main__":
     # When run directly, display implementation status
     print("\nLanceDB Adapter for Engram Memory System")
-    print("Status: PLANNED - Not yet implemented")
-    print("\nImplementation Timeline:")
-    print("1. Research Phase: Completed")
-    print("2. Design Phase: In Progress")
-    print("3. Implementation Phase: Upcoming")
-    print("4. Testing Phase: Pending")
-    print("5. Integration Phase: Pending")
-    print("6. Deployment Phase: Pending")
+    
+    # Check for LanceDB
+    try:
+        import lancedb
+        import pyarrow
+        print(f"Status: AVAILABLE - Using LanceDB {lancedb.__version__} with PyArrow {pyarrow.__version__}")
+    except ImportError:
+        print("Status: PLANNED - LanceDB not installed")
+        print("\nTo install LanceDB, run:")
+        print("  python vector/lancedb/install.py")
+    
+    # Display implementation info
+    print("\nImplementation Status:")
+    if VectorStore:
+        print("✅ Vector Store: Implemented")
+    else:
+        print("❌ Vector Store: Not implemented")
+    
     print("\nFor more information, see vector/lancedb/README.md")

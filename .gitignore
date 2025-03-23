@@ -42,6 +42,8 @@ htmlcov/
 .cmb/
 .engram/
 *.memory
+test_memories/
+vector_data/
 
 # Archive and logs
 archive/
