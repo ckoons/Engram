@@ -10,7 +10,7 @@ import os
 import sys
 import argparse
 import json
-from ollama_bridge import MemoryHandler, call_ollama_api
+from engram.ollama.ollama_bridge import MemoryHandler, call_ollama_api
 
 def parse_args():
     """Parse command line arguments"""

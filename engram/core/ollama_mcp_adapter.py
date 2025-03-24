@@ -23,18 +23,14 @@ logger = logging.getLogger("engram.ollama_mcp_adapter")
 
 # Import Ollama system prompts if available
 try:
-    # Look for ollama_system_prompts in the ollama directory
-    ollama_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "ollama")
-    sys.path.insert(0, ollama_dir)
-    
-    from ollama_system_prompts import (
+    from engram.ollama.ollama_system_prompts import (
         get_memory_system_prompt,
         get_communication_system_prompt, 
         get_combined_system_prompt,
         get_model_capabilities
     )
     SYSTEM_PROMPTS_AVAILABLE = True
-    logger.info(f"Loaded ollama_system_prompts from {ollama_dir}")
+    logger.info("Loaded ollama_system_prompts from engram.ollama")
 except ImportError:
     logger.warning("Ollama system prompts not available, will use default prompts")
     SYSTEM_PROMPTS_AVAILABLE = False
@@ -396,11 +392,10 @@ class OllamaMCPAdapter:
             
             # Import MemoryHandler from ollama/ollama_bridge if available
             try:
-                ollama_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "ollama")
-                sys.path.insert(0, ollama_dir)
-                from ollama_bridge import MemoryHandler
+                # Import using proper package path
+                from engram.ollama.ollama_bridge import MemoryHandler
                 memory_handler = MemoryHandler(client_id=client_id)
-                logger.info(f"Successfully loaded MemoryHandler from {ollama_dir}/ollama_bridge.py")
+                logger.info("Successfully loaded MemoryHandler from engram.ollama.ollama_bridge")
             except ImportError:
                 logger.warning("MemoryHandler from ollama/ollama_bridge.py not available, using simplified memory integration")
                 memory_handler = None

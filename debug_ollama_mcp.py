@@ -1,1 +1,0 @@
-/Users/cskoons/projects/github/Engram/utils/debug_ollama_mcp.py

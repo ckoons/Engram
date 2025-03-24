@@ -134,7 +134,7 @@ def main():
         # Correctly import memory functions from ollama_bridge instead since
         # detect_memory_operations doesn't exist in quickmem
         try:
-            from ollama_bridge import detect_memory_operations, handle_memory_operations
+            from engram.ollama.ollama_bridge import detect_memory_operations, handle_memory_operations
         except ImportError:
             # Create placeholder functions if needed
             def detect_memory_operations(text):
@@ -165,7 +165,7 @@ def main():
         engram_dir = find_engram_dir()
         
         # Add command to Engram's path and run the Ollama bridge
-        ollama_bridge_path = os.path.join(engram_dir, "ollama_bridge.py")
+        ollama_bridge_path = os.path.join(engram_dir, "ollama", "ollama_bridge.py")
         if not os.path.exists(ollama_bridge_path):
             logger.error(f"Ollama bridge not found at: {ollama_bridge_path}")
             sys.exit(1)

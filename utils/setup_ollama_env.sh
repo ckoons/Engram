@@ -23,9 +23,9 @@ else
 fi
 
 # Check if we're in the right directory
-if [ ! -f "ollama_bridge.py" ]; then
+if [ ! -f "ollama/ollama_bridge.py" ]; then
     echo "Error: This script must be run from the Engram project directory."
-    echo "Please navigate to the directory containing ollama_bridge.py."
+    echo "Please navigate to the directory containing ollama/ollama_bridge.py."
     exit 1
 fi
 
@@ -139,7 +139,7 @@ fi
 source "\$SCRIPT_DIR/$VENV_NAME/bin/activate"
 
 # Use absolute paths for Ollama bridge script
-OLLAMA_BRIDGE="\$SCRIPT_DIR/ollama_bridge.py"
+OLLAMA_BRIDGE="\$SCRIPT_DIR/ollama/ollama_bridge.py"
 
 # Verify the bridge file exists
 if [ ! -f "\$OLLAMA_BRIDGE" ]; then
