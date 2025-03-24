@@ -24,6 +24,9 @@ DEFAULT_CONFIG = {
     # Server settings
     "host": "127.0.0.1",
     "port": 8000,
+    "mcp_host": "127.0.0.1",
+    "mcp_port": 8001,
+    "enable_mcp": True,
     
     # Feature settings
     "auto_agency": True,

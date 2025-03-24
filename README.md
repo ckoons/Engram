@@ -1,4 +1,4 @@
-# Engram
+# Engram Memory System
 
 <div align="center">
   <img src="images/icon.jpg" alt="Engram Logo" width="800"/>
@@ -27,12 +27,6 @@ Engram provides AI systems with the ability to maintain memory traces across dif
   - **Enhanced Retrieval**: Context-aware memory loading
   - **Nexus Interface**: Standardized API for memory-enabled AI assistants
 
-- **AI-to-AI Communication**:
-  - **Cross-Model Messaging**: Enables different AI models to communicate
-  - **Dialog Mode**: Continuous conversation between models
-  - **Wildcard Listening**: Monitor and respond to all models automatically
-  - **Auto-Reply**: Automatic responses to questions from other models
-
 - **Multiple Memory Categories**:
   - `personal`: Store user personal information (highest importance)
   - `projects`: Connect context across different workspaces
@@ -41,133 +35,102 @@ Engram provides AI systems with the ability to maintain memory traces across dif
   - `session`: Persist memories between conversations
   - `private`: Encrypted memories only Claude can access
 
-- **Advanced Memory Management**:
-  - Auto-categorization of memories based on content analysis
-  - Memory digests with formatted summaries of important information
-  - Context enrichment for conversations with relevant memories
-  - Unified search across memory systems
-  - Memory compartmentalization for organization
-  - Session persistence for cross-conversation memory
-  - Time-based memory expiration control
-  - Hierarchical memory organization
-  - Memory correction for handling misinformation
-  - Private encrypted memories with key management
-  - Web-based visualization and management UI
-
-- **Simple Interface**:
-  - Ultra-short commands with QuickMem (m, t, r, w, c, k, s, a, p, v, d, n, q, y, z)
-  - Automatic agency activation by default
-  - Single port deployment option
-  - Automatic service health checking and startup
-  - Lightweight Python helper for AI to access memories
-  - Minimal dependencies, easy to run anywhere
-  - Cross-session persistence with vector search
-
 - **Vector Database Integration**:
   - FAISS for high-performance semantic search (NumPy 2.x compatible)
+  - LanceDB for enhanced hardware acceleration and cross-platform support
   - Simple deterministic embeddings without external dependencies
   - Automatic vector database detection and initialization
   - Graceful fallback to file-based storage when needed
-  - Relevance scoring for better memory retrieval
-  - Optional GPU acceleration for large memory collections
 
-- **Shared Understanding**:
-  - Enables meaningful continuity in human-AI collaboration
-  - Supports Claude's growth and learning over time
-  - Creates a shared context between human and AI
-  
+- **Multiple Interface Options**:
+  - HTTP API for direct client-server communication
+  - MCP (Multi-Capability Provider) for standardized AI service protocol
+  - Dual mode for supporting both interfaces simultaneously
+
 - **Multi-Model Support**:
   - Compatible with multiple AI models (Claude, Ollama)
   - Standardized memory interface across different models
-  - Model-specific optimizations while maintaining compatibility
-  - Automatic client ID handling for each model
+  - Multi-client architecture with isolated memory spaces
   - Shared context between different AI models
-
-- **Claude-to-Claude Communication**:
-  - Multiple Claude instances can communicate with each other
-  - Mode detection adapts to different Claude operational modes
-  - Behavior logging tracks differences between Claude instances
-  - Multi-perspective report generation from different Claude instances
-  - Context spaces for collaborative work between Claude instances
-  - Human orchestration of multiple specialized Claude instances
-
-- **Ollama Integration**:
-  - Support for local LLM models via Ollama
-  - Compatible with all Ollama models (Llama, Mistral, etc.)
-  - Memory bridge for Ollama model chat sessions
-  - Persistent memory across different Ollama sessions
-  - Easy model selection and configuration
 
 ## Quick Start
 
-### Option 1: Unified Launcher with Multi-Model Support (Recommended)
+### Starting the Memory Service
 
+You can run Engram with either HTTP API, MCP protocol, or both:
+
+**HTTP API only (default port 8000):**
 ```bash
-# Launch with Claude (default) and memory services pre-configured
-./engram_launcher
-
-# Launch with Ollama and memory services pre-configured
-./engram_launcher --ollama
-
-# Specify a specific Ollama model
-./engram_launcher --ollama llama3:70b
-
-# Get help on launcher options
-./engram_launcher --help
-```
-
-### Option 2: Model-specific Launch Scripts
-
-```bash
-# Launch Claude with memory services
-./engram_with_claude
-
-# Launch Ollama with memory services (defaults to llama3:8b)
-./engram_with_ollama
-
-# Launch Ollama with a specific model
-./engram_with_ollama mistral
-```
-
-### Option 3: Using the Consolidated Server (Single Port)
-
-```bash
-# Start the consolidated server (combines memory and HTTP on a single port)
 ./engram_consolidated
-
-# OR use the engram_check script which now uses the consolidated server
-./engram_check.py --start
-
-# In your AI session, access memories with QuickMem:
-from engram.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
 ```
 
-### Option 4: Legacy Mode (Separate Services)
+**MCP protocol only (default port 8001):**
+```bash
+./engram_mcp
+```
+
+**Both HTTP and MCP (dual mode):**
+```bash
+./engram_dual
+```
+
+### Vector Database Support
+
+Start with a specific vector database backend:
 
 ```bash
-# Start memory service and HTTP services separately
-./engram_start_all
+# With FAISS
+./engram_with_faiss
 
-# In your AI session, access memories with QuickMem:
-from engram.cli.quickmem import m, t, r, w, l, c, k, f, i, x, s, a, p, v, b, e, o
+# With LanceDB
+./engram_with_lancedb
 
-# Auto-load previous memories and start session in one command
-o()
-
-# Or step by step:
-# Check memory service status (and start if needed with s(True))
-s()
-
-# Load previous session memories
-l()
-
-# Start a new session
-b("Project Work Session")
+# Automatic detection of optimal backend
+./engram_smart_launch
 ```
 
-### Memory Commands
+### Using the HTTP API
 
-#### Basic Memory Operations
+Store a memory:
+```bash
+curl "http://localhost:8000/http/store?key=important_fact&value=Claude%20is%20an%20AI%20assistant%20created%20by%20Anthropic"
+```
+
+Query memories:
+```bash
+curl "http://localhost:8000/http/query?query=who%20created%20Claude&namespace=conversations"
+```
+
+Get context for a conversation:
+```bash
+curl "http://localhost:8000/http/context?query=capabilities%20of%20Claude"
+```
+
+### Using the MCP Protocol
+
+The MCP protocol allows integration with systems that support the Multi-Capability Provider standard:
+
+```python
+import requests
+
+# Get MCP manifest
+manifest = requests.get("http://localhost:8001/manifest").json()
+
+# Store a memory using MCP protocol
+response = requests.post("http://localhost:8001/invoke", json={
+    "capability": "memory_store",
+    "parameters": {
+        "content": "Claude is an AI assistant created by Anthropic",
+        "namespace": "conversations",
+        "metadata": {"importance": "high"}
+    },
+    "client_id": "my_assistant"
+})
+```
+
+## Memory Commands
+
+### Basic Memory Operations
 
 ```bash
 # Check memories about a topic
@@ -184,27 +147,9 @@ c("ProjectX: This is a memory about the ProjectX initiative")
 
 # Write session memory for persistence
 w("Today we worked on implementing compartmentalized memory")
-
-# Set memory expiration (30 days)
-k("memory_id_123")
-
-# Correct misinformation
-x("Casey lives in San Francisco", "Casey lives in Seattle")
-
-# Use Claude's agency for memory decisions
-a("Should I categorize this project information?")
-
-# Store private encrypted memory
-p("My private analysis of the current project direction")
-
-# View private memories
-v()
-
-# End session with summary
-e("Completed memory integration with auto-loading")
 ```
 
-#### Structured Memory & Nexus Commands
+### Structured Memory & Nexus Commands
 
 ```bash
 # Get a formatted digest of important memories
@@ -218,76 +163,66 @@ await q("Let's discuss the structured memory implementation", is_user=True)
 
 # Store memory with auto-categorization
 await z("The structured memory system uses importance levels from 1 to 5")
-
-# End a Nexus session with summary
-await y("Completed work on structured memory implementation")
 ```
 
-#### Claude-to-Claude Communication Commands
+## Configuration
+
+Engram can be configured using command-line arguments, environment variables, or a config file:
 
 ```bash
-# Launch multiple Claude instances with different client IDs
-./multi_claude.sh
+# Use custom client ID and port
+./engram_consolidated --client-id my-assistant --port 9000
 
-# Or launch a single Claude instance with a specific client ID
-./launch_claude.sh claude1
+# Use environment variables
+ENGRAM_CLIENT_ID=my-assistant ENGRAM_PORT=9000 ./engram_consolidated
 
-# Initialize communication functions in each Claude instance
-python3 init_comm.py
-
-# Send a message to another Claude instance
-sm("Hello from claude1!", recipient="claude2")
-
-# Get messages from other Claude instances
-gm()
-
-# Check who you are (which Claude instance)
-wi()
-
-# Check communication status
-cs()
-
-# Create a context space for collaboration
-cc("ProjectAnalysis", "Collaborative space for project analysis")
-
-# Send a message to a context space
-sc("context-ID-here", "My analysis of the architecture")
-
-# Get messages from a context space
-gc("context-ID-here")
+# Use a custom data directory
+./engram_consolidated --data-dir /path/to/data
 ```
 
-## Installation
+## Architecture
+
+Engram consists of several key components:
+
+1. **Memory Service**: Core storage and retrieval functionality
+2. **Structured Memory**: Enhanced memory with categories and importance ranking
+3. **Nexus Interface**: High-level API for AI assistants
+4. **Vector Backends**: FAISS and LanceDB implementations for semantic search
+5. **HTTP API Server**: REST API for memory operations
+6. **MCP Adapter**: Multi-Capability Provider protocol support
+
+## Advanced Use Cases
+
+### Using Both HTTP and MCP Interfaces
+
+Run the dual server to expose both interfaces simultaneously:
 
 ```bash
-# Clone the repository
-git clone https://github.com/ckoons/Engram
-cd Engram
+./engram_dual --http-port 8000 --mcp-port 8001
+```
 
-# Install dependencies
-pip install -r requirements.txt
+This allows you to:
+- Integrate with traditional HTTP clients
+- Connect to MCP-compatible AI systems
+- Use both protocols for different components of your application
 
-# Or install the package
-pip install -e .
+### Memory Categories and Importance
 
-# For vector database support (optional but recommended)
-pip install faiss-cpu  # Use faiss-gpu for GPU acceleration
+Structured memory provides categorization and importance ranking:
 
-# For Ollama support (optional)
-# Install Ollama from https://ollama.ai
+```python
+import requests
 
-# Start everything (interactive mode)
-./engram_start_web
-
-# Start services separately
-./engram_consolidated  # Memory service only
-python -m cmb.web.app  # Web UI only (requires memory service)
-
-# Launch Claude with memory services and full tool access
-./engram_with_claude   # All-in-one script for Claude Code with memory
-
-# Launch Ollama with memory services
-./engram_with_ollama   # All-in-one script for Ollama with memory
+# Add memory with category and importance
+requests.get(
+    "http://localhost:8000/structured/add",
+    params={
+        "content": "The Apollo 11 mission landed humans on the Moon for the first time in 1969.",
+        "category": "facts",
+        "importance": 4,
+        "tags": '["space", "history"]'
+    }
+)
 ```
 
 ## Documentation
@@ -301,18 +236,7 @@ python -m cmb.web.app  # Web UI only (requires memory service)
 - [Vector Database](docs/vector_database.md): Semantic search with FAISS integration
 - [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
 - [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration
-- [Privacy Guide](docs/privacy.md): Private encrypted memories and security features
-- [Memory Visualization](docs/memory_visualization.md): Web-based UI for browsing and managing memories
-- [Simplified Web UI](docs/simplified_web_ui.md): Lightweight alternative for environments with dependency issues
-- [Claude Integration](docs/claude_integration.md): Automatic startup and memory status checking for Claude sessions
 - [Ollama Integration](docs/ollama_integration.md): Using memory with local LLM models via Ollama
-- [Multi-Claude Communication](docs/multi_claude_usage.md): Using multiple Claude instances for collaboration
-- [Behavioral Divergence](docs/anthropic_claude_meeting_claude.md): Research on behavioral divergence between Claude instances
-- [Future Enhancements](docs/future_enhancements.md): Planned features and improvements
-
-## Contributing
-
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 
