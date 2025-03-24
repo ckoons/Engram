@@ -13,8 +13,8 @@ RESET="\033[0m"
 
 # Define paths
 ENGRAM_DIR="$HOME/projects/github/Engram"
-ENGRAM_WITH_CLAUDE="$ENGRAM_DIR/engram_with_claude"
-ENGRAM_WITH_OLLAMA="$ENGRAM_DIR/engram_with_ollama"
+ENGRAM_WITH_CLAUDE="$ENGRAM_DIR/core/engram_with_claude"
+ENGRAM_WITH_OLLAMA="$ENGRAM_DIR/ollama/engram_with_ollama"
 INSTALL_SCRIPT="$ENGRAM_DIR/install.sh"
 
 # Default model is Claude

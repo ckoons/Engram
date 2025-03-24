@@ -35,7 +35,7 @@ fi
 
 # Create symbolic link for engram launcher
 echo "Creating symbolic link for 'engram' command..."
-ln -sf "$SCRIPT_DIR/engram_launcher.sh" "$BIN_DIR/engram"
+ln -sf "$SCRIPT_DIR/utils/engram_launcher.sh" "$BIN_DIR/engram"
 chmod +x "$BIN_DIR/engram"
 
 # Install Python dependencies if pip is available
@@ -57,10 +57,10 @@ if command -v pip &> /dev/null; then
 fi
 
 # Make sure scripts are executable
-chmod +x "$SCRIPT_DIR/engram_launcher.sh"
-chmod +x "$SCRIPT_DIR/engram_with_claude"
-chmod +x "$SCRIPT_DIR/engram_check.py"
-chmod +x "$SCRIPT_DIR/engram_consolidated"
+chmod +x "$SCRIPT_DIR/utils/engram_launcher.sh"
+chmod +x "$SCRIPT_DIR/core/engram_with_claude"
+chmod +x "$SCRIPT_DIR/utils/engram_check.py"
+chmod +x "$SCRIPT_DIR/core/engram_consolidated"
 
 echo ""
 echo "Engram installed successfully!"

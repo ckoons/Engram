@@ -67,9 +67,9 @@ if [ ! -f "$LAUNCHER" ]; then
     echo -e "${YELLOW}Falling back to standard launcher${NC}"
     
     if [ $OLLAMA_MODE -eq 1 ]; then
-        LAUNCHER="$ENGRAM_DIR/engram_with_ollama"
+        LAUNCHER="$ENGRAM_DIR/ollama/engram_with_ollama"
     else
-        LAUNCHER="$ENGRAM_DIR/engram_with_claude"
+        LAUNCHER="$ENGRAM_DIR/core/engram_with_claude"
     fi
 fi
 
