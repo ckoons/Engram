@@ -1,15 +1,17 @@
 # Hermes Integration for Engram
 
-This module provides integration between Engram's memory system and Hermes's centralized database services, enabling enhanced vector storage and search capabilities.
+This module provides comprehensive integration between Engram and Hermes's centralized services, enabling enhanced capabilities for memory, messaging, and logging.
 
 ## Overview
 
-The Hermes integration for Engram replaces the standard memory storage with Hermes's centralized database services, providing:
+The Hermes integration for Engram connects to Hermes's centralized services, providing:
 
 - **Enhanced Vector Search**: Leverage advanced vector search capabilities from Hermes
 - **Centralized Storage**: Store memories in a centralized database shared across components
-- **Hardware Optimization**: Automatically use the optimal vector database based on available hardware (FAISS for NVIDIA GPUs, Qdrant for Apple Silicon)
-- **Fallback Mechanism**: Gracefully degrade to file-based storage if Hermes is unavailable
+- **Hardware Optimization**: Automatically use the optimal vector database based on available hardware
+- **Asynchronous Messaging**: Enable communication between Engram instances and other components
+- **Structured Logging**: Centralized logging with advanced filtering and querying
+- **Fallback Mechanism**: Gracefully degrade to local implementations if Hermes is unavailable
 
 ## Installation
 
@@ -27,9 +29,17 @@ pip install -e .
 
 The Hermes integration is included with Engram and does not require additional installation.
 
+## Components
+
+The Hermes integration includes several components:
+
+1. **Memory Adapter**: Interface to Hermes's database services for memory storage
+2. **Message Bus Adapter**: Interface to Hermes's message bus for component communication
+3. **Logging Adapter**: Interface to Hermes's centralized logging system
+
 ## Usage
 
-### Basic Usage
+### Memory Service
 
 To use the Hermes-backed memory service:
 
@@ -57,6 +67,58 @@ print(context)
 
 # Close connections when done
 await memory.close()
+```
+
+### Message Bus
+
+To use the Hermes message bus for communication:
+
+```python
+from engram.integrations.hermes.message_bus_adapter import MessageBusAdapter
+
+# Initialize the message bus
+message_bus = MessageBusAdapter(client_id="my_client")
+await message_bus.start()
+
+# Define a message handler
+async def handle_message(message):
+    print(f"Received: {message['content']}")
+
+# Subscribe to a topic
+await message_bus.subscribe("example.topic", handle_message)
+
+# Publish a message
+await message_bus.publish(
+    topic="example.topic",
+    message="Hello, world!",
+    metadata={"priority": "high"}
+)
+
+# Close connections when done
+await message_bus.close()
+```
+
+### Logging System
+
+To use the Hermes logging system:
+
+```python
+from engram.integrations.hermes.logging_adapter import LoggingAdapter
+
+# Initialize the logging adapter
+logger = LoggingAdapter(client_id="my_client")
+
+# Log messages at different levels
+logger.debug("Debug message")
+logger.info("Info message", component="memory")
+logger.warning("Warning message", context={"source": "user_input"})
+logger.error("Error message", source_file=__file__, source_line=42)
+logger.critical("Critical message", component="database", context={"error_code": 500})
+
+# Get recent logs
+logs = logger.get_logs(level="WARNING", limit=10)
+for log in logs:
+    print(f"{log['timestamp']} - {log['level']} - {log['message']}")
 ```
 
 ### Replacing the Default Memory Service
@@ -134,9 +196,12 @@ The Hermes-backed memory service implements the same interface as Engram's stand
 
 - `close()`: Close connections and clean up resources
 
-## Example
+## Examples
 
-See [example.py](example.py) for a complete demonstration of using the Hermes integration with Engram.
+- [memory_example.py](example.py) - Example of memory service usage
+- [message_bus_adapter.py](message_bus_adapter.py) - Example of message bus usage (see main function)
+- [logging_adapter.py](logging_adapter.py) - Example of logging system usage (see main function)
+- [full_integration_example.py](full_integration_example.py) - Comprehensive example using all integration features
 
 ## Requirements
 
@@ -144,8 +209,25 @@ See [example.py](example.py) for a complete demonstration of using the Hermes in
 - Async support (Python 3.7+)
 - Only standard Python libraries for fallback mode
 
-## Notes
+## Integration Notes
 
+### Memory System
 - Memory namespaces in Engram are mapped to namespaces in Hermes with the prefix `engram.{client_id}`
 - Compartments are stored locally but their contents are stored in Hermes
 - The interface is fully compatible with Engram's standard `MemoryService`, allowing drop-in replacement
+
+### Message Bus
+- Topics are namespaced with `engram.{client_id}` prefix
+- Messages can contain string or structured data (converted to/from JSON)
+- Provides clean asynchronous communication between Engram instances
+
+### Logging System
+- Logs are stored centrally and tagged with component ID
+- Provides automatic file-based logging with configurable levels
+- Supports context-rich structured logging for better filtering and analysis
+
+## Security Notes
+
+- Communication with Hermes services is currently unencrypted and should be used only in trusted networks
+- Future enhancements will include message encryption and authentication
+- Local fallback modes provide graceful degradation when Hermes is unavailable
