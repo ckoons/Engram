@@ -63,6 +63,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--available-models", type=str, nargs="+", 
                         help="List of available AI models for communication", 
                         default=["Claude"])
+    parser.add_argument("--hermes-integration", action="store_true",
+                        help="Enable Hermes integration for centralized database services")
     return parser.parse_args()
 
 def call_ollama_api(model: str, messages: List[Dict[str, str]], 
@@ -97,10 +99,11 @@ def call_ollama_api(model: str, messages: List[Dict[str, str]],
 class MemoryHandler:
     """Helper class to handle async/sync memory operations."""
     
-    def __init__(self, client_id="ollama"):
+    def __init__(self, client_id="ollama", use_hermes=False):
         """Initialize with client ID."""
         self.client_id = client_id
         self.sender_persona = "Echo"  # Default persona
+        self.use_hermes = use_hermes
         
         # Dialog mode settings
         self.dialog_mode = False
@@ -115,6 +118,18 @@ class MemoryHandler:
                 self.sender_persona = get_model_capabilities(model_name)["persona"]
             except Exception as e:
                 print(f"Error getting persona for {client_id}: {e}")
+        
+        # Initialize Hermes integration if requested
+        if use_hermes:
+            # Check if Hermes integration is available
+            try:
+                from hermes.utils.database_helper import DatabaseClient
+                os.environ["ENGRAM_USE_HERMES"] = "1"
+                print("\033[92mEnabled Hermes integration for memory services\033[0m")
+            except ImportError:
+                print("\033[93mHermes integration requested but not available\033[0m")
+                print("\033[93mFalling back to standard memory service\033[0m")
+                self.use_hermes = False
     
     @staticmethod
     def store_memory(content: str):
@@ -534,8 +549,8 @@ def main():
     # Set client ID for Engram
     os.environ["ENGRAM_CLIENT_ID"] = args.client_id
     
-    # Create memory handler with client ID
-    memory = MemoryHandler(client_id=args.client_id)
+    # Create memory handler with client ID and Hermes integration if enabled
+    memory = MemoryHandler(client_id=args.client_id, use_hermes=args.hermes_integration)
     
     # Make it globally available for error recovery
     global memory_handler
