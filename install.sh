@@ -38,23 +38,33 @@ echo "Creating symbolic link for 'engram' command..."
 ln -sf "$SCRIPT_DIR/utils/engram_launcher.sh" "$BIN_DIR/engram"
 chmod +x "$BIN_DIR/engram"
 
-# Install Python dependencies if pip is available
-if command -v pip &> /dev/null; then
-    echo "Installing Python dependencies..."
+# Check for UV and install if needed
+if ! command -v uv &> /dev/null; then
+    echo "UV not found. Installing..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
     
-    # Try to install in the user's virtual environment if it exists
-    if [ -d "$SCRIPT_DIR/venv" ]; then
-        echo "Found virtual environment, installing dependencies there..."
-        source "$SCRIPT_DIR/venv/bin/activate"
-        pip install -r "$SCRIPT_DIR/requirements.txt"
-        pip install requests urllib3 pydantic==2.10.6 fastapi python-dotenv
-        deactivate
-    else
-        echo "Installing dependencies globally..."
-        pip install -r "$SCRIPT_DIR/requirements.txt"
-        pip install requests urllib3 pydantic==2.10.6 fastapi python-dotenv
+    # Add UV to PATH if not already added by installer
+    if ! command -v uv &> /dev/null; then
+        echo "Adding UV to PATH..."
+        export PATH="$HOME/.cargo/bin:$PATH"
     fi
 fi
+
+# Install Python dependencies
+echo "Installing Python dependencies with UV..."
+
+# Create and use virtual environment
+if [ ! -d "$SCRIPT_DIR/venv" ]; then
+    echo "Creating virtual environment with UV..."
+    uv venv "$SCRIPT_DIR/venv" --python=python3.10
+fi
+
+# Install in the virtual environment
+echo "Installing dependencies in virtual environment..."
+source "$SCRIPT_DIR/venv/bin/activate"
+uv pip install -r "$SCRIPT_DIR/requirements.txt"
+uv pip install requests urllib3 pydantic==2.10.6 fastapi python-dotenv
+deactivate
 
 # Make sure scripts are executable
 chmod +x "$SCRIPT_DIR/utils/engram_launcher.sh"
