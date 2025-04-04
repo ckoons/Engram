@@ -23,7 +23,10 @@ from engram.core.memory.search import search_memory, get_relevant_context
 # Export standard namespaces
 STANDARD_NAMESPACES = ["conversations", "thinking", "longterm", "projects", "compartments", "session"]
 
-# Export the main class
+# Import latent space components
+from engram.core.memory.latent_space import LatentMemorySpace, LatentSpaceManager, ThoughtState
+
+# Export the main classes
 __all__ = [
     "MemoryService",
     "STANDARD_NAMESPACES",
@@ -33,5 +36,8 @@ __all__ = [
     "set_compartment_expiration",
     "list_compartments",
     "search_memory",
-    "get_relevant_context"
+    "get_relevant_context",
+    "LatentMemorySpace",
+    "LatentSpaceManager",
+    "ThoughtState"
 ]

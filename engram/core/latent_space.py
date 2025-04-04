@@ -4,6 +4,10 @@ Latent Space Memory System for Engram
 
 This module implements a specialized memory framework for continuous latent space reasoning,
 allowing components to iteratively refine their thinking processes.
+
+Note: This is the original implementation of the latent space system.
+The updated implementation using LatentMemorySpace and LatentSpaceManager classes can be found
+in the memory/latent_space.py module. New development should use those classes instead.
 """
 
 import time
