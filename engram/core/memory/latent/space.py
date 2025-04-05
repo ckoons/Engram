@@ -10,12 +10,24 @@ import time
 from datetime import datetime
 
 # Import queries
-from .queries import get_thought, get_reasoning_trace, list_thoughts, abandon_thought
+from .queries import get_thought, get_reasoning_trace, list_thoughts, abandon_thought 
 from typing import Dict, List, Any, Optional, Union, Tuple
 import json
 
 from engram.core.memory.base import MemoryService
 from .states import ThoughtState
+from .operations import (
+    refine_thought,
+    finalize_thought,
+    transition_thought_state,
+    merge_thoughts
+)
+from .persistence import (
+    save_thoughts,
+    load_thoughts,
+    initialize_space,
+    initialize_thought
+)
 
 logger = logging.getLogger("engram.memory.latent.space")
 
@@ -56,48 +68,16 @@ class LatentMemorySpace:
         self.thoughts: Dict[str, Dict[str, Any]] = {}
         
         # Initialize namespace in memory service
-        self._initialize_space()
+        initialize_space(self.memory_service, self.namespace)
+        
+        # Load existing thoughts if any
+        self.thoughts = load_thoughts(self.memory_service, self.namespace)
         
         logger.info(f"Initialized latent memory space {self.space_id} (shared: {self.shared})")
     
-    def _initialize_space(self):
-        """Initialize the latent space in memory service."""
-        # Create namespace for this latent space
-        if hasattr(self.memory_service.storage, "initialize_namespace"):
-            self.memory_service.storage.initialize_namespace(self.namespace)
-            
-        # Load existing thoughts if any
-        self._load_thoughts()
-    
-    def _load_thoughts(self):
-        """Load existing thoughts from storage."""
-        try:
-            # Check if index file exists
-            metadata_file = self.memory_service.data_dir / f"{self.memory_service.client_id}" / f"{self.namespace}-thoughts.json"
-            if metadata_file.exists():
-                with open(metadata_file, 'r') as f:
-                    self.thoughts = json.load(f)
-                logger.info(f"Loaded {len(self.thoughts)} thoughts from {self.namespace}")
-            else:
-                # Initialize empty thought registry
-                self.thoughts = {}
-        except Exception as e:
-            logger.error(f"Error loading thoughts from {self.namespace}: {e}")
-            self.thoughts = {}
-    
     def _save_thoughts(self):
         """Save thought registry to storage."""
-        try:
-            # Ensure directory exists
-            metadata_dir = self.memory_service.data_dir / f"{self.memory_service.client_id}"
-            metadata_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Save thought registry
-            metadata_file = metadata_dir / f"{self.namespace}-thoughts.json"
-            with open(metadata_file, 'w') as f:
-                json.dump(self.thoughts, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving thoughts to {self.namespace}: {e}")
+        save_thoughts(self.thoughts, self.memory_service, self.namespace)
     
     async def initialize_thought(self, 
                                thought_seed: str, 
@@ -114,47 +94,24 @@ class LatentMemorySpace:
         Returns:
             Unique thought ID
         """
-        # Generate thought ID
-        thought_id = f"thought-{uuid.uuid4()}"
+        # Use the component ID from constructor if not provided
+        effective_component_id = component_id or self.owner_component
         
-        # Create thought metadata
-        thought_metadata = {
-            "thought_id": thought_id,
-            "component_id": component_id or self.owner_component or "unknown",
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
-            "state": ThoughtState.INITIAL,
-            "iteration": 0,
-            "iterations": [0],  # List of available iterations
-            **(metadata or {})
-        }
-        
-        # Store initial thought
-        content = {
-            "thought": thought_seed,
-            "iteration": 0,
-            "state": ThoughtState.INITIAL
-        }
-        
-        success = await self.memory_service.add(
-            content=json.dumps(content),
-            namespace=self.namespace,
-            metadata={
-                "thought_id": thought_id,
-                "iteration": 0,
-                **thought_metadata
-            }
+        # Initialize the thought
+        thought_id, thought_metadata = await initialize_thought(
+            self.memory_service,
+            self.namespace,
+            thought_seed,
+            effective_component_id,
+            metadata
         )
         
-        if success:
+        if thought_id and thought_metadata:
             # Add to thought registry
             self.thoughts[thought_id] = thought_metadata
             self._save_thoughts()
-            
-            logger.info(f"Initialized thought {thought_id} in space {self.space_id}")
             return thought_id
         else:
-            logger.error(f"Failed to initialize thought in space {self.space_id}")
             return None
     
     async def refine_thought(self, 
@@ -172,70 +129,20 @@ class LatentMemorySpace:
         Returns:
             Tuple of (success, iteration_number)
         """
-        # Check if thought exists
-        if thought_id not in self.thoughts:
-            logger.error(f"Thought {thought_id} not found in space {self.space_id}")
-            return False, -1
-        
-        # Get thought metadata
-        thought_metadata = self.thoughts[thought_id]
-        
-        # Check if thought can be refined
-        if thought_metadata["state"] in [ThoughtState.FINALIZED, ThoughtState.ABANDONED]:
-            logger.warning(f"Cannot refine thought {thought_id}: already in state {thought_metadata['state']}")
-            return False, -1
-        
-        # Calculate next iteration
-        next_iteration = thought_metadata["iteration"] + 1
-        
-        # Store refinement
-        content = {
-            "thought": refinement,
-            "iteration": next_iteration,
-            "state": ThoughtState.REFINING,
-            "previous_iteration": thought_metadata["iteration"]
-        }
-        
-        refinement_metadata = {
-            "thought_id": thought_id,
-            "iteration": next_iteration,
-            "refined_at": datetime.now().isoformat(),
-            **(metadata or {})
-        }
-        
-        success = await self.memory_service.add(
-            content=json.dumps(content),
-            namespace=self.namespace,
-            metadata=refinement_metadata
+        success, iteration = await refine_thought(
+            self.memory_service,
+            self.namespace,
+            thought_id,
+            refinement,
+            self.thoughts,
+            metadata,
+            self.max_history_length
         )
         
         if success:
-            # Update thought metadata
-            thought_metadata["iteration"] = next_iteration
-            thought_metadata["iterations"].append(next_iteration)
-            thought_metadata["state"] = ThoughtState.REFINING
-            thought_metadata["updated_at"] = datetime.now().isoformat()
-            
-            # Prune iterations if needed
-            if len(thought_metadata["iterations"]) > self.max_history_length:
-                # Keep first and last few iterations
-                keep_first = max(1, self.max_history_length // 3)
-                keep_last = self.max_history_length - keep_first
-                
-                iterations = thought_metadata["iterations"]
-                thought_metadata["iterations"] = (
-                    iterations[:keep_first] + 
-                    iterations[-keep_last:]
-                )
-            
-            # Save updated thought registry
             self._save_thoughts()
-            
-            logger.info(f"Refined thought {thought_id} to iteration {next_iteration}")
-            return True, next_iteration
-        else:
-            logger.error(f"Failed to refine thought {thought_id}")
-            return False, -1
+        
+        return success, iteration
     
     async def finalize_thought(self, 
                             thought_id: str, 
@@ -254,93 +161,196 @@ class LatentMemorySpace:
         Returns:
             Boolean indicating success
         """
-        # Check if thought exists
-        if thought_id not in self.thoughts:
-            logger.error(f"Thought {thought_id} not found in space {self.space_id}")
-            return False
-        
-        # Get thought metadata
-        thought_metadata = self.thoughts[thought_id]
-        
-        # Get final content
-        if final_content is None:
-            # Retrieve the latest refinement
-            search_results = await self.memory_service.search(
-                query=thought_id,
-                namespace=self.namespace,
-                limit=1
-            )
-            
-            if not search_results["results"]:
-                logger.error(f"Failed to retrieve latest refinement for thought {thought_id}")
-                return False
-            
-            # Parse content
-            try:
-                content_obj = json.loads(search_results["results"][0]["content"])
-                final_content = content_obj["thought"]
-            except Exception as e:
-                logger.error(f"Failed to parse thought content: {e}")
-                return False
-        
-        # Store finalized thought
-        content = {
-            "thought": final_content,
-            "iteration": thought_metadata["iteration"] + 1 if final_content else thought_metadata["iteration"],
-            "state": ThoughtState.FINALIZED,
-            "previous_iteration": thought_metadata["iteration"]
-        }
-        
-        finalized_metadata = {
-            "thought_id": thought_id,
-            "iteration": content["iteration"],
-            "finalized_at": datetime.now().isoformat(),
-            "from_iterations": thought_metadata["iterations"]
-        }
-        
-        success = await self.memory_service.add(
-            content=json.dumps(content),
-            namespace=self.namespace,
-            metadata=finalized_metadata
+        success = await finalize_thought(
+            self.memory_service,
+            self.namespace,
+            thought_id,
+            self.thoughts,
+            final_content,
+            persist,
+            persist_namespace
         )
         
         if success:
-            # Update thought metadata
-            thought_metadata["state"] = ThoughtState.FINALIZED
-            thought_metadata["updated_at"] = datetime.now().isoformat()
-            thought_metadata["finalized_at"] = datetime.now().isoformat()
-            
-            if final_content:
-                thought_metadata["iteration"] += 1
-                thought_metadata["iterations"].append(thought_metadata["iteration"])
-            
-            # Save updated thought registry
             self._save_thoughts()
+        
+        return success
+    
+    async def pause_thought(self, thought_id: str, reason: Optional[str] = None) -> bool:
+        """
+        Pause active work on a thought without abandoning it.
+        
+        Args:
+            thought_id: ID of the thought to pause
+            reason: Optional reason for pausing
             
-            # Persist to another namespace if requested
-            if persist:
-                target_namespace = persist_namespace or "longterm"
-                
-                # Format for persistence
-                persistence_content = (
-                    f"Finalized thought from latent space {self.space_id}:\n\n"
-                    f"{final_content}\n\n"
-                    f"[Final version after {len(thought_metadata['iterations'])} refinement iterations]"
-                )
-                
-                await self.memory_service.add(
-                    content=persistence_content,
-                    namespace=target_namespace,
-                    metadata={
-                        "thought_id": thought_id,
-                        "latent_space_id": self.space_id,
-                        "source": "latent_space",
-                        "iterations": len(thought_metadata["iterations"])
-                    }
-                )
+        Returns:
+            Boolean indicating success
+        """
+        success = await transition_thought_state(
+            self.memory_service,
+            self.namespace,
+            thought_id,
+            self.thoughts,
+            ThoughtState.PAUSED,
+            reason
+        )
+        
+        if success:
+            self._save_thoughts()
+        
+        return success
+    
+    async def reject_thought(self, thought_id: str, reason: str) -> bool:
+        """
+        Explicitly reject a thought as invalid or incorrect.
+        
+        Args:
+            thought_id: ID of the thought to reject
+            reason: Reason for rejection (required)
             
-            logger.info(f"Finalized thought {thought_id} in space {self.space_id}")
-            return True
-        else:
-            logger.error(f"Failed to finalize thought {thought_id}")
+        Returns:
+            Boolean indicating success
+        """
+        # Require a reason for rejection
+        if not reason:
+            logger.error("A reason is required to reject a thought")
             return False
+        
+        success = await transition_thought_state(
+            self.memory_service,
+            self.namespace,
+            thought_id,
+            self.thoughts,
+            ThoughtState.REJECTED,
+            reason
+        )
+        
+        if success:
+            self._save_thoughts()
+        
+        return success
+    
+    async def reconsider_thought(self, 
+                             thought_id: str, 
+                             reason: str,
+                             new_context: Optional[str] = None) -> bool:
+        """
+        Start reconsidering a previously finalized, abandoned, or rejected thought.
+        
+        Args:
+            thought_id: ID of the thought to reconsider
+            reason: Reason for reconsidering
+            new_context: Optional new context or evidence
+            
+        Returns:
+            Boolean indicating success
+        """
+        # Require a reason for reconsidering
+        if not reason:
+            logger.error("A reason is required to reconsider a thought")
+            return False
+        
+        additional_metadata = {}
+        if new_context:
+            additional_metadata["new_context"] = new_context
+        
+        success = await transition_thought_state(
+            self.memory_service,
+            self.namespace,
+            thought_id,
+            self.thoughts,
+            ThoughtState.RECONSIDERING,
+            reason,
+            additional_metadata
+        )
+        
+        if success:
+            self._save_thoughts()
+        
+        return success
+    
+    async def supersede_thought(self,
+                            old_thought_id: str,
+                            new_thought_id: str,
+                            reason: str) -> bool:
+        """
+        Mark a thought as superseded by a newer, better thought.
+        
+        Args:
+            old_thought_id: ID of the thought being superseded
+            new_thought_id: ID of the thought that supersedes it
+            reason: Reason for superseding
+            
+        Returns:
+            Boolean indicating success
+        """
+        # Check if thoughts exist
+        if old_thought_id not in self.thoughts:
+            logger.error(f"Old thought {old_thought_id} not found in space {self.space_id}")
+            return False
+            
+        if new_thought_id not in self.thoughts:
+            logger.error(f"New thought {new_thought_id} not found in space {self.space_id}")
+            return False
+        
+        # Require a reason
+        if not reason:
+            logger.error("A reason is required to supersede a thought")
+            return False
+        
+        # Set additional metadata for the supersede operation
+        additional_metadata = {
+            "superseded_by": new_thought_id
+        }
+        
+        success = await transition_thought_state(
+            self.memory_service,
+            self.namespace,
+            old_thought_id,
+            self.thoughts,
+            ThoughtState.SUPERSEDED,
+            reason,
+            additional_metadata
+        )
+        
+        if success:
+            # Update new thought to reference the superseded thought
+            new_metadata = self.thoughts[new_thought_id]
+            if "supersedes" not in new_metadata:
+                new_metadata["supersedes"] = []
+            new_metadata["supersedes"].append(old_thought_id)
+            
+            self._save_thoughts()
+        
+        return success
+    
+    async def merge_thoughts(self,
+                         thought_ids: List[str],
+                         merged_content: str,
+                         reason: str) -> Optional[str]:
+        """
+        Merge multiple thoughts into a new combined thought.
+        
+        Args:
+            thought_ids: List of thought IDs to merge
+            merged_content: Content for the merged thought
+            reason: Reason for merging
+            
+        Returns:
+            ID of the new merged thought or None if failed
+        """
+        merged_thought_id = await merge_thoughts(
+            self.memory_service,
+            self.namespace,
+            thought_ids,
+            self.thoughts,
+            merged_content,
+            reason,
+            self.owner_component
+        )
+        
+        if merged_thought_id:
+            self._save_thoughts()
+        
+        return merged_thought_id
