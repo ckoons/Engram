@@ -116,12 +116,28 @@ echo "  - Structured Memory API: http://$HOST:$PORT/structured/*"
 echo "  - Client Management: http://$HOST:$PORT/clients/*"
 echo ""
 
-# Set PYTHONPATH to include the current directory
-export PYTHONPATH=$SCRIPT_DIR:$PYTHONPATH
+# Set PYTHONPATH to include project root
+export PYTHONPATH=$PROJECT_ROOT:$PYTHONPATH
+echo -e "${YELLOW}Setting PYTHONPATH to include: $PROJECT_ROOT${NC}"
 
 # Build command with all available options
 # Use engram module
 CMD="python -m engram.api.consolidated_server"
+
+# Verify the module can be found
+echo -e "${YELLOW}Verifying engram module can be imported...${NC}"
+if ! python -c "import engram" 2>/dev/null; then
+    echo -e "${RED}Error: Cannot import engram module. Installing it now...${NC}"
+    pip install -e "$PROJECT_ROOT" --quiet
+    if ! python -c "import engram" 2>/dev/null; then
+        echo -e "${RED}Failed to install engram module. Aborting.${NC}"
+        exit 1
+    else
+        echo -e "${GREEN}Successfully installed engram module.${NC}"
+    fi
+else
+    echo -e "${GREEN}Successfully imported engram module.${NC}"
+fi
 
 # Add config file if specified
 if [ -n "$CONFIG_PATH" ]; then

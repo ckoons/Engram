@@ -37,6 +37,17 @@ USE_FALLBACK = os.environ.get('ENGRAM_USE_FALLBACK', '').lower() in ('1', 'true'
 from engram.core.config import get_config
 from engram.core.memory_manager import MemoryManager
 from engram.api.dependencies import default_client_id, memory_manager
+
+# Initialize dependencies manually since we've removed the lifespan function
+default_client_id = os.environ.get("ENGRAM_CLIENT_ID", "claude")
+data_dir = os.environ.get("ENGRAM_DATA_DIR", None)
+try:
+    memory_manager = MemoryManager(data_dir=data_dir)
+    logger.info(f"Memory manager initialized directly with data directory: {data_dir or '~/.engram'}")
+    logger.info(f"Default client ID: {default_client_id}")
+except Exception as e:
+    logger.error(f"Failed to initialize memory manager: {e}")
+    memory_manager = None
 from engram.api.controllers.root import router as root_router
 from engram.api.controllers.core_memory import router as core_router
 from engram.api.controllers.http_wrapper import router as http_router
@@ -81,12 +92,12 @@ async def lifespan(app: FastAPI):
         logger.info("Memory manager shut down")
 
 
-# Initialize FastAPI app
+# Initialize FastAPI app - removed lifespan for stability testing
 app = FastAPI(
     title="Engram Consolidated API",
     description="Unified API for Engram combining core memory services and HTTP wrapper",
-    version="0.7.0",
-    lifespan=lifespan
+    version="0.7.0"
+    # lifespan parameter removed to test if this fixes startup issues
 )
 
 # Add CORS middleware
