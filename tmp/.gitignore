@@ -1,8 +1,0 @@
-# Temporary directory for debugging and testing
-# All contents of this directory are ignored by git
-
-# Ignore everything in this directory
-*
-
-# Except this file
-!.gitignore
