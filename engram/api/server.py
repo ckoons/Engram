@@ -58,38 +58,16 @@ from engram.api.controllers.nexus import router as nexus_router
 from engram.api.controllers.clients import router as clients_router
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan manager for FastAPI - handles startup and shutdown"""
-    global memory_manager, default_client_id
-    
-    # Get default client ID from environment
-    default_client_id = os.environ.get("ENGRAM_CLIENT_ID", "claude")
-    data_dir = os.environ.get("ENGRAM_DATA_DIR", None)
-    
-    # Initialize memory manager
-    try:
-        memory_manager = MemoryManager(data_dir=data_dir)
-        logger.info(f"Memory manager initialized with data directory: {data_dir or '~/.engram'}")
-        logger.info(f"Default client ID: {default_client_id}")
-        
-        # Pre-initialize default client
-        await memory_manager.get_memory_service(default_client_id)
-        await memory_manager.get_structured_memory(default_client_id)
-        await memory_manager.get_nexus_interface(default_client_id)
-        logger.info(f"Pre-initialized services for default client: {default_client_id}")
-        logger.info("Server startup complete and ready to accept connections")
-    except Exception as e:
-        logger.error(f"Failed to initialize memory manager: {e}")
-        # Re-raise to prevent server from starting with incomplete initialization
-        raise
-    
-    yield  # Server is running here
-    
-    # Shutdown code
-    if memory_manager:
-        await memory_manager.shutdown()
-        logger.info("Memory manager shut down")
+# Lifecycle management removed for stability
+# The code below used to be a lifespan function that managed initialization and cleanup
+# It caused startup issues and has been removed in favor of direct initialization
+# 
+# A future implementation could add back proper lifecycle management with:
+# - Proper error handling
+# - Timeouts to prevent hanging
+# - Resilient design allowing for partial initialization
+#
+# For now, initialization happens at module level (see above)
 
 
 # Initialize FastAPI app - removed lifespan for stability testing
