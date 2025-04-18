@@ -1,243 +1,40 @@
-# Engram Memory System
-
-<div align="center">
-  <img src="images/icon.jpg" alt="Engram Logo" width="800"/>
-  <h3>AI Engrams<br>Persistent Memory Across Sessions</h3>
-</div>
-
-A lightweight system providing AI with persistent memory, enabling continuous conversation and growth across sessions.
+# Engram
 
 ## Overview
 
-Engram provides AI systems with the ability to maintain memory traces across different interactions and conversations. This allows AI to:
+Engram is the persistent memory system for the Tekton ecosystem. It provides storage, retrieval, and semantic search capabilities across all components, enabling context preservation and knowledge management.
 
-- Remember past conversations
-- Store and access its own thinking processes
-- Maintain long-term prioritized memories
-- Bridge context across different projects
-- Organize memories in compartments
-- Control memory expiration
-- Automatically categorize and rank memory importance
+## Key Features
 
-## Features
-
-- **Balanced Memory System**:
-  - **Structured Memory**: File-based storage with categorized organization
-  - **Memory Importance Ranking**: 1-5 scale with prioritized retrieval
-  - **Enhanced Retrieval**: Context-aware memory loading
-  - **Nexus Interface**: Standardized API for memory-enabled AI assistants
-
-- **Multiple Memory Categories**:
-  - `personal`: Store user personal information (highest importance)
-  - `projects`: Connect context across different workspaces
-  - `facts`: Maintain general factual information
-  - `preferences`: Remember user preferences and settings
-  - `session`: Persist memories between conversations
-  - `private`: Encrypted memories only Claude can access
-
-- **Vector Database Integration**:
-  - FAISS for high-performance semantic search (NumPy 2.x compatible)
-  - LanceDB for enhanced hardware acceleration and cross-platform support
-  - Simple deterministic embeddings without external dependencies
-  - Automatic vector database detection and initialization
-  - Graceful fallback to file-based storage when needed
-
-- **Multiple Interface Options**:
-  - HTTP API for direct client-server communication
-  - MCP (Multi-Capability Provider) for standardized AI service protocol
-  - Dual mode for supporting both interfaces simultaneously
-
-- **Multi-Model Support**:
-  - Compatible with multiple AI models (Claude, Ollama)
-  - Standardized memory interface across different models
-  - Multi-client architecture with isolated memory spaces
-  - Shared context between different AI models
+- Persistent memory storage and retrieval
+- Vector database integration for semantic search
+- Memory compartmentalization and organization
+- Structured memory for complex data
+- Latent space operations
 
 ## Quick Start
 
-### Starting the Memory Service
-
-You can run Engram with either HTTP API, MCP protocol, or both:
-
-**HTTP API only (default port 8000):**
 ```bash
-./engram_consolidated
-```
+# Start Engram with Claude integration
+./utils/engram_with_claude
 
-**MCP protocol only (default port 8001):**
-```bash
-./engram_mcp
-```
+# Start Engram with Ollama integration
+./utils/engram_with_ollama
 
-**Both HTTP and MCP (dual mode):**
-```bash
-./engram_dual
-```
+# Start Engram with FAISS vector database
+./utils/engram_with_faiss_mcp
 
-### Vector Database Support
-
-Start with a specific vector database backend:
-
-```bash
-# With FAISS
-./engram_with_faiss
-
-# With LanceDB
-./engram_with_lancedb
-
-# Automatic detection of optimal backend
-./engram_smart_launch
-```
-
-### Using the HTTP API
-
-Store a memory:
-```bash
-curl "http://localhost:8000/http/store?key=important_fact&value=Claude%20is%20an%20AI%20assistant%20created%20by%20Anthropic"
-```
-
-Query memories:
-```bash
-curl "http://localhost:8000/http/query?query=who%20created%20Claude&namespace=conversations"
-```
-
-Get context for a conversation:
-```bash
-curl "http://localhost:8000/http/context?query=capabilities%20of%20Claude"
-```
-
-### Using the MCP Protocol
-
-The MCP protocol allows integration with systems that support the Multi-Capability Provider standard:
-
-```python
-import requests
-
-# Get MCP manifest
-manifest = requests.get("http://localhost:8001/manifest").json()
-
-# Store a memory using MCP protocol
-response = requests.post("http://localhost:8001/invoke", json={
-    "capability": "memory_store",
-    "parameters": {
-        "content": "Claude is an AI assistant created by Anthropic",
-        "namespace": "conversations",
-        "metadata": {"importance": "high"}
-    },
-    "client_id": "my_assistant"
-})
-```
-
-## Memory Commands
-
-### Basic Memory Operations
-
-```bash
-# Check memories about a topic
-m("project")
-
-# Store a thought
-t("Casey seems to prefer structured memory organization")
-
-# Remember important information
-r("Casey's current project is about memory management")
-
-# Create a compartment for project memories
-c("ProjectX: This is a memory about the ProjectX initiative")
-
-# Write session memory for persistence
-w("Today we worked on implementing compartmentalized memory")
-```
-
-### Structured Memory & Nexus Commands
-
-```bash
-# Get a formatted digest of important memories
-await d(max_memories=10, include_private=False)
-
-# Start a Nexus session with memory enrichment
-await n("Project Discussion Session")
-
-# Process a message with memory context
-await q("Let's discuss the structured memory implementation", is_user=True)
-
-# Store memory with auto-categorization
-await z("The structured memory system uses importance levels from 1 to 5")
-```
-
-## Configuration
-
-Engram can be configured using command-line arguments, environment variables, or a config file:
-
-```bash
-# Use custom client ID and port
-./engram_consolidated --client-id my-assistant --port 9000
-
-# Use environment variables
-ENGRAM_CLIENT_ID=my-assistant ENGRAM_PORT=9000 ./engram_consolidated
-
-# Use a custom data directory
-./engram_consolidated --data-dir /path/to/data
-```
-
-## Architecture
-
-Engram consists of several key components:
-
-1. **Memory Service**: Core storage and retrieval functionality
-2. **Structured Memory**: Enhanced memory with categories and importance ranking
-3. **Nexus Interface**: High-level API for AI assistants
-4. **Vector Backends**: FAISS and LanceDB implementations for semantic search
-5. **HTTP API Server**: REST API for memory operations
-6. **MCP Adapter**: Multi-Capability Provider protocol support
-
-## Advanced Use Cases
-
-### Using Both HTTP and MCP Interfaces
-
-Run the dual server to expose both interfaces simultaneously:
-
-```bash
-./engram_dual --http-port 8000 --mcp-port 8001
-```
-
-This allows you to:
-- Integrate with traditional HTTP clients
-- Connect to MCP-compatible AI systems
-- Use both protocols for different components of your application
-
-### Memory Categories and Importance
-
-Structured memory provides categorization and importance ranking:
-
-```python
-import requests
-
-# Add memory with category and importance
-requests.get(
-    "http://localhost:8000/structured/add",
-    params={
-        "content": "The Apollo 11 mission landed humans on the Moon for the first time in 1969.",
-        "category": "facts",
-        "importance": 4,
-        "tags": '["space", "history"]'
-    }
-)
+# Use the quick memory CLI
+python -m engram.cli.quickmem store --key "test" --value "test value"
+python -m engram.cli.quickmem retrieve --key "test"
 ```
 
 ## Documentation
 
-- [Usage Guide](docs/usage.md): Basic usage instructions and examples
-- [Script Reference](docs/scripts.md): Guide to all executable scripts
-- [QuickMem Commands](docs/quickmem.md): Ultra-short memory command reference
-- [Configuration](docs/configuration.md): Customize Engram to your preferences
-- [Consolidated Server](docs/consolidated_server.md): Single-port server for simplified deployment
-- [Structured Memory](docs/structured_memory.md): Balanced memory system with importance ranking
-- [Vector Database](docs/vector_database.md): Semantic search with FAISS integration
-- [HTTP Wrapper](docs/http_wrapper.md): HTTP service details
-- [Memory Management](docs/memory_management.md): Compartments, session persistence, and expiration
-- [Ollama Integration](docs/ollama_integration.md): Using memory with local LLM models via Ollama
+For detailed documentation, see the following resources in the MetaData directory:
 
-## License
-
-MIT License - See [LICENSE](LICENSE) for details.
+- [Component Summaries](../MetaData/ComponentSummaries.md) - Overview of all Tekton components
+- [Tekton Architecture](../MetaData/TektonArchitecture.md) - Overall system architecture
+- [Component Integration](../MetaData/ComponentIntegration.md) - How components interact
+- [CLI Operations](../MetaData/CLI_Operations.md) - Command-line operations
+- [Engram Changelog](../MetaData/Engram_CHANGELOG.md) - Version history
