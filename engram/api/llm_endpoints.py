@@ -3,17 +3,24 @@
 LLM API Endpoints for Engram
 
 This module implements FastAPI endpoints for interacting with LLMs
-through the Engram system, leveraging the LLM adapter.
+through the Engram system, leveraging the LLM adapter with enhanced
+tekton-llm-client features.
 """
 
 import asyncio
 import json
 import logging
 import uuid
-from typing import Dict, List, Any, Optional, AsyncGenerator
+from typing import Dict, List, Any, Optional, AsyncGenerator, Callable, Awaitable
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+# Import enhanced tekton-llm-client features
+from tekton_llm_client import (
+    StreamHandler, LLMSettings,
+    collect_stream, stream_to_string
+)
 
 # Configure logging
 logging.basicConfig(
@@ -45,6 +52,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     content: str
     model: str
+    provider: Optional[str] = None
 
 class LLMAnalysisRequest(BaseModel):
     content: str
@@ -55,6 +63,8 @@ class LLMAnalysisResponse(BaseModel):
     analysis: str
     success: bool
     error: Optional[str] = None
+    model: Optional[str] = None
+    provider: Optional[str] = None
 
 # Create router
 router = APIRouter(
@@ -78,14 +88,37 @@ async def chat(
     # Format messages for the LLM adapter
     messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
     
+    # Extract user message and system prompt
+    user_message = None
+    system_prompt = request.system
+    
+    for msg in reversed(messages):
+        if msg["role"] == "user" and not user_message:
+            user_message = msg["content"]
+        if msg["role"] == "system" and not system_prompt:
+            system_prompt = msg["content"]
+    
+    # If no user message found, use the last message
+    if not user_message and messages:
+        user_message = messages[-1]["content"]
+    
     # Get chat response
     try:
-        response = await llm_adapter.chat(
-            messages=messages,
-            model=request.model,
+        # Create custom settings
+        custom_settings = LLMSettings(
             temperature=request.temperature,
             max_tokens=request.max_tokens,
-            system_prompt=request.system
+            model=request.model
+        )
+        
+        # Get LLM client
+        client = await llm_adapter._get_client()
+        
+        # Generate text
+        response = await client.generate_text(
+            prompt=user_message,
+            system_prompt=system_prompt,
+            settings=custom_settings
         )
         
         # Store in memory if requested
@@ -95,7 +128,7 @@ async def chat(
                 f"{'User' if msg.role == 'user' else 'Assistant'}: {msg.content}"
                 for msg in request.messages
             ])
-            conversation += f"\n\nAssistant: {response}"
+            conversation += f"\n\nAssistant: {response.content}"
             
             # Get memory service
             memory_service = await memory_manager.get_memory_service(None)
@@ -106,13 +139,15 @@ async def chat(
                 namespace=request.memory_namespace,
                 metadata={
                     "type": "conversation",
-                    "model": request.model or llm_adapter.default_model
+                    "model": response.model,
+                    "provider": response.provider
                 }
             )
         
         return {
-            "content": response,
-            "model": request.model or llm_adapter.default_model
+            "content": response.content,
+            "model": response.model,
+            "provider": response.provider
         }
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
@@ -134,42 +169,93 @@ async def stream_chat(
     # Format messages for the LLM adapter
     messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
     
+    # Extract user message and system prompt
+    user_message = None
+    system_prompt = request.system
+    
+    for msg in reversed(messages):
+        if msg["role"] == "user" and not user_message:
+            user_message = msg["content"]
+        if msg["role"] == "system" and not system_prompt:
+            system_prompt = msg["content"]
+    
+    # If no user message found, use the last message
+    if not user_message and messages:
+        user_message = messages[-1]["content"]
+    
+    # Create custom settings
+    custom_settings = LLMSettings(
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+        model=request.model
+    )
+    
     # Create streaming response
     async def generate():
         full_response = ""
-        async for chunk in llm_adapter._stream_chat(
-            messages=messages,
-            model=request.model,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            system_prompt=request.system
-        ):
-            full_response += chunk
-            yield f"data: {json.dumps({'content': chunk})}\n\n"
         
-        # Store in memory if requested
-        if request.persist_memory:
-            # Create formatted conversation for memory
-            conversation = "\n\n".join([
-                f"{'User' if msg.role == 'user' else 'Assistant'}: {msg.content}"
-                for msg in request.messages
-            ])
-            conversation += f"\n\nAssistant: {full_response}"
-            
-            # Get memory service
-            memory_service = await memory_manager.get_memory_service(None)
-            
-            # Store in memory asynchronously (don't wait for completion)
-            asyncio.create_task(memory_service.add(
-                content=conversation,
-                namespace=request.memory_namespace,
-                metadata={
-                    "type": "conversation",
-                    "model": request.model or llm_adapter.default_model
-                }
-            ))
+        # Get LLM client
+        client = await llm_adapter._get_client()
         
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        try:
+            # Start streaming
+            response_stream = await client.generate_text(
+                prompt=user_message,
+                system_prompt=system_prompt,
+                settings=custom_settings,
+                streaming=True
+            )
+            
+            # Create a callback for collecting the full response
+            async def collect_callback(chunk: str) -> None:
+                nonlocal full_response
+                full_response += chunk
+                yield f"data: {json.dumps({'content': chunk})}\n\n"
+            
+            # Process the stream using StreamHandler
+            stream_handler = StreamHandler(
+                process_fn=lambda chunk: json.dumps({'content': chunk.chunk if hasattr(chunk, 'chunk') else chunk})
+            )
+            
+            # Process each chunk in the stream
+            async for chunk in response_stream:
+                chunk_text = chunk.chunk if hasattr(chunk, 'chunk') else chunk
+                full_response += chunk_text
+                yield f"data: {json.dumps({'content': chunk_text})}\n\n"
+                
+            # Get final model info
+            model_info = getattr(response_stream, '_model_info', {})
+            model = model_info.get('model', request.model or llm_adapter.default_model)
+            provider = model_info.get('provider', llm_adapter.default_provider)
+            
+            # Store in memory if requested
+            if request.persist_memory:
+                # Create formatted conversation for memory
+                conversation = "\n\n".join([
+                    f"{'User' if msg.role == 'user' else 'Assistant'}: {msg.content}"
+                    for msg in request.messages
+                ])
+                conversation += f"\n\nAssistant: {full_response}"
+                
+                # Get memory service
+                memory_service = await memory_manager.get_memory_service(None)
+                
+                # Store in memory asynchronously (don't wait for completion)
+                asyncio.create_task(memory_service.add(
+                    content=conversation,
+                    namespace=request.memory_namespace,
+                    metadata={
+                        "type": "conversation",
+                        "model": model,
+                        "provider": provider
+                    }
+                ))
+            
+            yield f"data: {json.dumps({'type': 'done', 'model': model, 'provider': provider})}\n\n"
+            
+        except Exception as e:
+            logger.error(f"Streaming error: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
     return StreamingResponse(
         generate(),
@@ -202,96 +288,161 @@ async def websocket_chat(
             persist_memory = data.get("persist_memory", True)
             memory_namespace = data.get("memory_namespace", "conversations")
             
+            # Extract user message and system prompt
+            user_message = None
+            system_prompt = system
+            
+            for msg in reversed(messages):
+                if msg["role"] == "user" and not user_message:
+                    user_message = msg["content"]
+                if msg["role"] == "system" and not system_prompt:
+                    system_prompt = msg["content"]
+            
+            # If no user message found, use the last message
+            if not user_message and messages:
+                user_message = messages[-1]["content"]
+            
+            # Create custom settings
+            custom_settings = LLMSettings(
+                temperature=temperature,
+                max_tokens=max_tokens,
+                model=model
+            )
+            
+            # Get LLM client
+            client = await llm_adapter._get_client()
+            
             if stream:
-                # Streaming response
-                full_response = ""
-                async for chunk in llm_adapter._stream_chat(
-                    messages=messages,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    system_prompt=system
-                ):
-                    full_response += chunk
+                # Create a websocket callback
+                async def ws_callback(chunk: str) -> None:
                     await websocket.send_json({
                         "type": "chunk",
                         "content": chunk
                     })
                 
-                # Send completion message
-                await websocket.send_json({
-                    "type": "done",
-                    "model": model or llm_adapter.default_model
-                })
+                # Create a stream handler
+                stream_handler = StreamHandler(callback_fn=ws_callback)
                 
-                # Store in memory if requested
-                if persist_memory:
-                    # Create formatted conversation for memory
-                    conversation = "\n\n".join([
-                        f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
-                        for msg in messages
-                    ])
-                    conversation += f"\n\nAssistant: {full_response}"
+                # Streaming response
+                full_response = ""
+                
+                try:
+                    # Start streaming
+                    response_stream = await client.generate_text(
+                        prompt=user_message,
+                        system_prompt=system_prompt,
+                        settings=custom_settings,
+                        streaming=True
+                    )
                     
-                    # Get memory service
-                    memory_service = await memory_manager.get_memory_service(None)
+                    # Process the stream manually
+                    async for chunk in response_stream:
+                        chunk_text = chunk.chunk if hasattr(chunk, 'chunk') else chunk
+                        full_response += chunk_text
+                        await websocket.send_json({
+                            "type": "chunk",
+                            "content": chunk_text
+                        })
                     
-                    # Store in memory asynchronously
-                    asyncio.create_task(memory_service.add(
-                        content=conversation,
-                        namespace=memory_namespace,
-                        metadata={
-                            "type": "conversation",
-                            "model": model or llm_adapter.default_model
-                        }
-                    ))
+                    # Get final model info
+                    model_info = getattr(response_stream, '_model_info', {})
+                    model_used = model_info.get('model', model or llm_adapter.default_model)
+                    provider_used = model_info.get('provider', llm_adapter.default_provider)
+                    
+                    # Send completion message
+                    await websocket.send_json({
+                        "type": "done",
+                        "model": model_used,
+                        "provider": provider_used
+                    })
+                    
+                    # Store in memory if requested
+                    if persist_memory:
+                        # Create formatted conversation for memory
+                        conversation = "\n\n".join([
+                            f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
+                            for msg in messages
+                        ])
+                        conversation += f"\n\nAssistant: {full_response}"
+                        
+                        # Get memory service
+                        memory_service = await memory_manager.get_memory_service(None)
+                        
+                        # Store in memory asynchronously
+                        asyncio.create_task(memory_service.add(
+                            content=conversation,
+                            namespace=memory_namespace,
+                            metadata={
+                                "type": "conversation",
+                                "model": model_used,
+                                "provider": provider_used
+                            }
+                        ))
+                except Exception as e:
+                    logger.error(f"WebSocket streaming error: {str(e)}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "error": str(e)
+                    })
             else:
                 # Non-streaming response
-                response = await llm_adapter.chat(
-                    messages=messages,
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    system_prompt=system
-                )
-                
-                # Send complete response
-                await websocket.send_json({
-                    "type": "message",
-                    "content": response,
-                    "model": model or llm_adapter.default_model
-                })
-                
-                # Store in memory if requested
-                if persist_memory:
-                    # Create formatted conversation for memory
-                    conversation = "\n\n".join([
-                        f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
-                        for msg in messages
-                    ])
-                    conversation += f"\n\nAssistant: {response}"
+                try:
+                    # Generate text
+                    response = await client.generate_text(
+                        prompt=user_message,
+                        system_prompt=system_prompt,
+                        settings=custom_settings
+                    )
                     
-                    # Get memory service
-                    memory_service = await memory_manager.get_memory_service(None)
+                    # Send complete response
+                    await websocket.send_json({
+                        "type": "message",
+                        "content": response.content,
+                        "model": response.model,
+                        "provider": response.provider
+                    })
                     
-                    # Store in memory asynchronously
-                    asyncio.create_task(memory_service.add(
-                        content=conversation,
-                        namespace=memory_namespace,
-                        metadata={
-                            "type": "conversation",
-                            "model": model or llm_adapter.default_model
-                        }
-                    ))
+                    # Store in memory if requested
+                    if persist_memory:
+                        # Create formatted conversation for memory
+                        conversation = "\n\n".join([
+                            f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content']}"
+                            for msg in messages
+                        ])
+                        conversation += f"\n\nAssistant: {response.content}"
+                        
+                        # Get memory service
+                        memory_service = await memory_manager.get_memory_service(None)
+                        
+                        # Store in memory asynchronously
+                        asyncio.create_task(memory_service.add(
+                            content=conversation,
+                            namespace=memory_namespace,
+                            metadata={
+                                "type": "conversation",
+                                "model": response.model,
+                                "provider": response.provider
+                            }
+                        ))
+                except Exception as e:
+                    logger.error(f"WebSocket error: {str(e)}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "error": str(e)
+                    })
     
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
-        await websocket.send_json({
-            "type": "error",
-            "error": str(e)
-        })
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "error": str(e)
+            })
+        except:
+            # Connection may already be closed
+            pass
 
 @router.post("/analyze", response_model=LLMAnalysisResponse)
 async def analyze_content(
@@ -299,7 +450,7 @@ async def analyze_content(
     llm_adapter: LLMAdapter = Depends(get_llm_adapter)
 ):
     """
-    Analyze content using the LLM.
+    Analyze content using the LLM with enhanced features.
     """
     try:
         result = await llm_adapter.analyze_memory(
@@ -321,10 +472,10 @@ async def get_models(
     llm_adapter: LLMAdapter = Depends(get_llm_adapter)
 ):
     """
-    Get available LLM models.
+    Get available LLM models using the enhanced client features.
     """
     try:
-        models = llm_adapter.get_available_models()
+        models = await llm_adapter.get_available_models()
         return models
     except Exception as e:
         logger.error(f"Error getting models: {str(e)}")
