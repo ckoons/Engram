@@ -333,3 +333,32 @@ class MemoryService:
         except Exception as e:
             logger.error(f"Error keeping memory: {e}")
             return False
+            
+    async def get_storage_info(self) -> Dict[str, Any]:
+        """
+        Get information about the storage backend.
+        
+        Returns:
+            Dictionary containing storage information
+        """
+        try:
+            storage_info = {
+                "storage_type": self.storage.__class__.__name__,
+                "vector_available": self.vector_available,
+                "client_id": self.client_id,
+                "data_dir": str(self.data_dir),
+                "namespaces": await self.get_namespaces()
+            }
+            
+            # Get additional storage-specific info if available
+            if hasattr(self.storage, "get_storage_info"):
+                storage_specific_info = self.storage.get_storage_info()
+                storage_info.update(storage_specific_info)
+                
+            return storage_info
+        except Exception as e:
+            logger.error(f"Error getting storage info: {e}")
+            return {
+                "storage_type": "unknown",
+                "error": str(e)
+            }

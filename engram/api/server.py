@@ -439,9 +439,10 @@ def main():
         os.environ["ENGRAM_DEBUG"] = "1"
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Get host and port from environment or arguments
+    # Get host and port from environment or arguments using standardized port config
+    from engram.utils.port_config import get_engram_port
     host = args.host or os.environ.get("ENGRAM_HOST", "127.0.0.1")
-    port = args.port or int(os.environ.get("ENGRAM_PORT", 8000))
+    port = args.port or get_engram_port()
     
     # Start the server
     logger.info(f"Starting Engram API server on {host}:{port}")
