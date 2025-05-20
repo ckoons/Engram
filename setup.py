@@ -20,6 +20,7 @@ requirements = [
     "requests>=2.31.0",
     "python-dotenv>=1.0.0",
     "pydantic>=2.4.2",
+    "tekton-core>=0.1.0",
 ]
 
 # Optional requirements (vector database for memory capabilities)
