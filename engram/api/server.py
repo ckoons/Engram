@@ -22,8 +22,11 @@ from fastapi.responses import JSONResponse
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../shared/utils')))
 try:
     from health_check import create_health_response
-except ImportError:
+    from hermes_registration import HermesRegistration, heartbeat_loop
+except ImportError as e:
+    logger.warning(f"Could not import shared utils: {e}")
     create_health_response = None
+    HermesRegistration = None
 
 # Configure logging
 logging.basicConfig(
@@ -93,6 +96,11 @@ if USE_HERMES:
         logger.error(f"Failed to initialize Hermes integration: {e}")
         logger.warning("Continuing without Hermes integration")
         USE_HERMES = False
+
+# Global state for Hermes registration
+is_registered_with_hermes = False
+hermes_registration = None
+heartbeat_task = None
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -171,7 +179,7 @@ async def health():
             port=8000,
             version="0.8.0",
             status=health_status,
-            registered=False,  # Will be updated when registration is implemented
+            registered=is_registered_with_hermes,
             details=details
         )
     else:
@@ -182,7 +190,7 @@ async def health():
             "timestamp": datetime.now().isoformat(),
             "component": "engram",
             "port": 8000,
-            "registered_with_hermes": False,
+            "registered_with_hermes": is_registered_with_hermes,
             "details": details
         }
 
@@ -424,6 +432,7 @@ async def deactivate_compartment(
 # Startup event to initialize Hermes integration if enabled
 @app.on_event("startup")
 async def startup_event():
+    global is_registered_with_hermes, hermes_registration, heartbeat_task
     logger.info("Starting up Engram API server")
     
     if USE_HERMES:
@@ -433,6 +442,51 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to start Hermes integration: {e}")
             logger.warning("Continuing without Hermes integration")
+    
+    # Register with Hermes if available
+    if HermesRegistration:
+        hermes_registration = HermesRegistration()
+        is_registered_with_hermes = await hermes_registration.register_component(
+            component_name="engram",
+            port=8000,
+            version="0.8.0",
+            capabilities=[
+                "memory_storage",
+                "vector_search",
+                "semantic_similarity",
+                "memory_retrieval",
+                "conversation_memory"
+            ],
+            metadata={
+                "vector_support": not USE_FALLBACK,
+                "storage_type": "vector" if not USE_FALLBACK else "simple",
+                "hermes_integration": USE_HERMES
+            }
+        )
+        
+        # Start heartbeat task if registered
+        if is_registered_with_hermes:
+            heartbeat_task = asyncio.create_task(
+                heartbeat_loop(hermes_registration, "engram", interval=30)
+            )
+            logger.info("Started Hermes heartbeat task")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    global heartbeat_task
+    
+    # Cancel heartbeat task
+    if heartbeat_task:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+    
+    # Deregister from Hermes
+    if hermes_registration and is_registered_with_hermes:
+        await hermes_registration.deregister("engram")
 
 def parse_arguments():
     """Parse command line arguments."""
