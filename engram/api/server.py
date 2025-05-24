@@ -18,6 +18,13 @@ from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# Add shared utils to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../shared/utils')))
+try:
+    from health_check import create_health_response
+except ImportError:
+    create_health_response = None
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -140,20 +147,43 @@ async def health():
         # Try to get storage info
         storage_info = await memory_service.get_storage_info()
         
-        return {
-            "status": "ok",
-            "timestamp": datetime.utcnow().isoformat(),
+        health_status = "healthy"
+        details = {
             "client_id": default_client_id,
             "storage_type": storage_info.get("storage_type", "unknown"),
             "vector_available": not USE_FALLBACK,
             "hermes_integration": USE_HERMES
         }
+        
     except Exception as e:
         logger.error(f"Health check failed: {e}")
+        health_status = "unhealthy"
+        details = {
+            "error": str(e),
+            "vector_available": not USE_FALLBACK,
+            "hermes_integration": USE_HERMES
+        }
+    
+    # Use standardized health response if available
+    if create_health_response:
+        return create_health_response(
+            component_name="engram",
+            port=8000,
+            version="0.8.0",
+            status=health_status,
+            registered=False,  # Will be updated when registration is implemented
+            details=details
+        )
+    else:
+        # Fallback to manual format
         return {
-            "status": "error",
-            "timestamp": datetime.utcnow().isoformat(),
-            "error": str(e)
+            "status": health_status,
+            "version": "0.8.0",
+            "timestamp": datetime.now().isoformat(),
+            "component": "engram",
+            "port": 8000,
+            "registered_with_hermes": False,
+            "details": details
         }
 
 @app.post("/memory")
