@@ -440,7 +440,7 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
     
     # Get host and port from environment or arguments using standardized port config
-    from engram.utils.port_config import get_engram_port
+    from tekton.utils.port_config import get_engram_port
     host = args.host or os.environ.get("ENGRAM_HOST", "127.0.0.1")
     port = args.port or get_engram_port()
     
