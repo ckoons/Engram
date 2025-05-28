@@ -52,7 +52,15 @@ class FileStorage:
         if self.fallback_file.exists():
             try:
                 with open(self.fallback_file, "r") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Ensure all namespaces have list values
+                    if isinstance(data, dict):
+                        for namespace, memories in data.items():
+                            if memories is None:
+                                data[namespace] = []
+                            elif not isinstance(memories, list):
+                                data[namespace] = []
+                    return data
             except Exception as e:
                 logger.error(f"Error loading fallback memories: {e}")
         
@@ -149,10 +157,19 @@ class FileStorage:
         if namespace not in self.memories:
             return results
             
+        # Get memories for namespace, ensure it's a list
+        namespace_memories = self.memories.get(namespace, [])
+        if namespace_memories is None:
+            namespace_memories = []
+            
         # Simple keyword matching for fallback
-        for memory in self.memories[namespace]:
+        for memory in namespace_memories:
+            # Skip None or invalid memory entries
+            if memory is None or not isinstance(memory, dict):
+                continue
+                
             content = memory.get("content", "")
-            if query.lower() in content.lower():
+            if content and query.lower() in content.lower():
                 results.append({
                     "id": memory.get("id", ""),
                     "content": content,

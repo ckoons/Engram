@@ -271,15 +271,23 @@ async def search_memory(
                 content={"error": "Missing required parameter: query"}
             )
         
+        # Handle empty or None namespace
+        if not namespace:
+            namespace = "conversations"
+        
         results = await memory_service.search(
             query=query,
             namespace=namespace,
             limit=limit
         )
         
+        # Ensure results is always a dict with expected structure
+        if not isinstance(results, dict):
+            results = {"results": [], "count": 0}
+        
         return results
     except Exception as e:
-        logger.error(f"Error searching memory: {e}")
+        logger.error(f"Error searching memory: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"error": f"Error searching memory: {str(e)}"}

@@ -58,10 +58,16 @@ async def search_memory(
     # Perform the search
     results = storage.search(query, namespace, limit * 2)  # Get extra for filtering
     
+    # Ensure results is a list
+    if results is None:
+        results = []
+    
     # Filter out forgotten items
     if forgotten_items:
         filtered_results = []
         for result in results:
+            if result is None:
+                continue
             should_include = True
             content = result.get("content", "")
             
@@ -78,8 +84,15 @@ async def search_memory(
         
         results = filtered_results
     
+    # Ensure results is still a list after filtering
+    if results is None:
+        results = []
+    
     # Limit the results
     results = results[:limit]
+    
+    # Filter out any None values that might have slipped through
+    results = [r for r in results if r is not None]
     
     return {
         "results": results,
