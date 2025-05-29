@@ -69,30 +69,41 @@ async def memory_store(
     Returns:
         Result of memory storage operation
     """
-    if not memory_service:
-        return {
-            "error": "Memory service not provided"
-        }
-        
+    # Use the new compatibility layer if available
     try:
-        # Store the memory
-        success = await memory_service.add(
-            content=content,
-            namespace=namespace,
-            metadata=metadata
-        )
-        
-        # Return result
-        return {
-            "success": success,
-            "namespace": namespace
+        from engram.api.mcp_compat import memory_store as compat_store
+        params = {
+            "text": content,
+            "namespace": namespace,
+            "metadata": metadata or {}
         }
-    except Exception as e:
-        logger.error(f"Error storing memory: {e}")
-        return {
-            "error": f"Error storing memory: {str(e)}",
-            "success": False
-        }
+        return await compat_store(params)
+    except ImportError:
+        # Fallback to direct memory service
+        if not memory_service:
+            return {
+                "error": "Memory service not provided"
+            }
+            
+        try:
+            # Store the memory
+            success = await memory_service.add(
+                content=content,
+                namespace=namespace,
+                metadata=metadata
+            )
+            
+            # Return result
+            return {
+                "success": success,
+                "namespace": namespace
+            }
+        except Exception as e:
+            logger.error(f"Error storing memory: {e}")
+            return {
+                "error": f"Error storing memory: {str(e)}",
+                "success": False
+            }
 
 @mcp_capability(
     name="memory_operations",
