@@ -18,22 +18,26 @@ from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Add shared utils to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../shared/utils')))
-try:
-    from health_check import create_health_response
-    from hermes_registration import HermesRegistration, heartbeat_loop
-except ImportError as e:
-    logger.warning(f"Could not import shared utils: {e}")
-    create_health_response = None
-    HermesRegistration = None
+# Add Tekton root to path if not already present
+tekton_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if tekton_root not in sys.path:
+    sys.path.insert(0, tekton_root)
 
-# Configure logging
+# Configure logging first
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("engram.api.server")
+
+# Import shared utils with correct path
+try:
+    from shared.utils.health_check import create_health_response
+    from shared.utils.hermes_registration import HermesRegistration, heartbeat_loop
+except ImportError as e:
+    logger.warning(f"Could not import shared utils: {e}")
+    create_health_response = None
+    HermesRegistration = None
 
 # Check if we're in debug mode
 DEBUG = os.environ.get('ENGRAM_DEBUG', '').lower() in ('1', 'true', 'yes')
