@@ -12,6 +12,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request, Depends, HTTPException, Header
@@ -23,21 +24,17 @@ tekton_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'
 if tekton_root not in sys.path:
     sys.path.insert(0, tekton_root)
 
-# Configure logging first
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("engram.api.server")
+# Import shared utils
+from shared.utils.health_check import create_health_response
+from shared.utils.hermes_registration import HermesRegistration, heartbeat_loop
+from shared.utils.logging_setup import setup_component_logging
+from shared.utils.env_config import get_component_config
+from shared.utils.errors import StartupError
+from shared.utils.startup import component_startup, StartupMetrics
+from shared.utils.shutdown import GracefulShutdown
 
-# Import shared utils with correct path
-try:
-    from shared.utils.health_check import create_health_response
-    from shared.utils.hermes_registration import HermesRegistration, heartbeat_loop
-except ImportError as e:
-    logger.warning(f"Could not import shared utils: {e}")
-    create_health_response = None
-    HermesRegistration = None
+# Use shared logger
+logger = setup_component_logging("engram")
 
 # Check if we're in debug mode
 DEBUG = os.environ.get('ENGRAM_DEBUG', '').lower() in ('1', 'true', 'yes')
@@ -79,6 +76,7 @@ except Exception as e:
     sys.exit(1)
 
 # Initialize Hermes integration if enabled
+hermes_adapter = None
 if USE_HERMES:
     try:
         from engram.integrations.hermes.memory_adapter import HermesMemoryAdapter
@@ -106,11 +104,120 @@ is_registered_with_hermes = False
 hermes_registration = None
 heartbeat_task = None
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for Engram"""
+    global is_registered_with_hermes, hermes_registration, heartbeat_task
+    
+    # Startup
+    logger.info("Starting Engram Memory API")
+    
+    async def engram_startup():
+        """Engram-specific startup logic"""
+        try:
+            # Get configuration
+            config = get_component_config()
+            port = config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT", 8000))
+            
+            if USE_HERMES:
+                try:
+                    # Start Hermes integration
+                    await start_hermes_integration()
+                except Exception as e:
+                    logger.error(f"Failed to start Hermes integration: {e}")
+                    logger.warning("Continuing without Hermes integration")
+            
+            # Register with Hermes
+            global is_registered_with_hermes, hermes_registration, heartbeat_task
+            hermes_registration = HermesRegistration()
+            
+            logger.info(f"Attempting to register Engram with Hermes on port {port}")
+            is_registered_with_hermes = await hermes_registration.register_component(
+                component_name="engram",
+                port=port,
+                version="0.8.0",
+                capabilities=[
+                    "memory_storage",
+                    "vector_search",
+                    "semantic_similarity",
+                    "memory_retrieval",
+                    "conversation_memory"
+                ],
+                metadata={
+                    "vector_support": not USE_FALLBACK,
+                    "storage_type": "vector" if not USE_FALLBACK else "simple",
+                    "hermes_integration": USE_HERMES
+                }
+            )
+            
+            if is_registered_with_hermes:
+                logger.info("Successfully registered with Hermes")
+                # Start heartbeat task
+                heartbeat_task = asyncio.create_task(
+                    heartbeat_loop(hermes_registration, "engram", interval=30)
+                )
+                logger.info("Started Hermes heartbeat task")
+            else:
+                logger.warning("Failed to register with Hermes - continuing without registration")
+                
+        except Exception as e:
+            logger.error(f"Error during Engram startup: {e}", exc_info=True)
+            raise StartupError(str(e), "engram", "STARTUP_FAILED")
+    
+    # Execute startup with metrics
+    try:
+        metrics = await component_startup("engram", engram_startup, timeout=30)
+        logger.info(f"Engram started successfully in {metrics.total_time:.2f}s")
+    except Exception as e:
+        logger.error(f"Failed to start Engram: {e}")
+        raise
+    
+    # Create shutdown handler
+    shutdown = GracefulShutdown("engram")
+    
+    # Register cleanup tasks
+    async def cleanup_hermes():
+        """Cleanup Hermes registration"""
+        if heartbeat_task:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        
+        if hermes_registration and is_registered_with_hermes:
+            await hermes_registration.deregister("engram")
+            logger.info("Deregistered from Hermes")
+    
+    async def cleanup_memory_manager():
+        """Cleanup memory manager resources"""
+        if USE_HERMES and hermes_adapter:
+            try:
+                await hermes_adapter.close()
+            except Exception as e:
+                logger.warning(f"Error closing Hermes adapter: {e}")
+        
+        # Add any other memory manager cleanup here
+        logger.info("Memory manager cleaned up")
+    
+    shutdown.register_cleanup(cleanup_hermes)
+    shutdown.register_cleanup(cleanup_memory_manager)
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Engram Memory API")
+    await shutdown.shutdown_sequence(timeout=10)
+    
+    # Socket release delay for macOS
+    await asyncio.sleep(0.5)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Engram Memory API",
     description="API for Engram memory services",
-    version="0.8.0"
+    version="0.8.0",
+    lifespan=lifespan
 )
 
 # Add CORS middleware
@@ -441,64 +548,6 @@ async def deactivate_compartment(
             content={"error": f"Error deactivating compartment: {str(e)}"}
         )
 
-# Startup event to initialize Hermes integration if enabled
-@app.on_event("startup")
-async def startup_event():
-    global is_registered_with_hermes, hermes_registration, heartbeat_task
-    logger.info("Starting up Engram API server")
-    
-    if USE_HERMES:
-        try:
-            # Start Hermes integration
-            await start_hermes_integration()
-        except Exception as e:
-            logger.error(f"Failed to start Hermes integration: {e}")
-            logger.warning("Continuing without Hermes integration")
-    
-    # Register with Hermes if available
-    if HermesRegistration:
-        hermes_registration = HermesRegistration()
-        is_registered_with_hermes = await hermes_registration.register_component(
-            component_name="engram",
-            port=8000,
-            version="0.8.0",
-            capabilities=[
-                "memory_storage",
-                "vector_search",
-                "semantic_similarity",
-                "memory_retrieval",
-                "conversation_memory"
-            ],
-            metadata={
-                "vector_support": not USE_FALLBACK,
-                "storage_type": "vector" if not USE_FALLBACK else "simple",
-                "hermes_integration": USE_HERMES
-            }
-        )
-        
-        # Start heartbeat task if registered
-        if is_registered_with_hermes:
-            heartbeat_task = asyncio.create_task(
-                heartbeat_loop(hermes_registration, "engram", interval=30)
-            )
-            logger.info("Started Hermes heartbeat task")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    global heartbeat_task
-    
-    # Cancel heartbeat task
-    if heartbeat_task:
-        heartbeat_task.cancel()
-        try:
-            await heartbeat_task
-        except asyncio.CancelledError:
-            pass
-    
-    # Deregister from Hermes
-    if hermes_registration and is_registered_with_hermes:
-        await hermes_registration.deregister("engram")
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -506,7 +555,7 @@ def parse_arguments():
     parser.add_argument("--client-id", type=str, default=None,
                       help="Default client ID (default: 'default')")
     parser.add_argument("--port", type=int, default=None,
-                      help="Port to run the server on (default: 8000)")
+                      help="Port to run the server on (default: from env config)")
     parser.add_argument("--host", type=str, default=None,
                       help="Host to bind the server to (default: '127.0.0.1')")
     parser.add_argument("--data-dir", type=str, default=None,
@@ -536,9 +585,9 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
     
     # Get host and port from environment or arguments using standardized port config
-    from tekton.utils.port_config import get_engram_port
+    config = get_component_config()
     host = args.host or os.environ.get("ENGRAM_HOST", "127.0.0.1")
-    port = args.port or get_engram_port()
+    port = args.port or (config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT", 8000)))
     
     # Start the server
     logger.info(f"Starting Engram API server on {host}:{port}")
