@@ -25,7 +25,6 @@ fi
 cd "$SCRIPT_DIR"
 
 # Set environment variables
-export ENGRAM_PORT=8000
 export PYTHONPATH="$SCRIPT_DIR:$TEKTON_ROOT:$PYTHONPATH"
 export ENGRAM_MODE="tekton"
 
@@ -54,7 +53,7 @@ sleep 2
 
 # Start the Engram service
 echo -e "${YELLOW}Starting Engram consolidated server...${RESET}"
-python -m engram.api.consolidated_server --port $ENGRAM_PORT > "$HOME/.tekton/logs/engram.log" 2>&1 &
+python -m engram.api.app --port $ENGRAM_PORT > "$HOME/.tekton/logs/engram.log" 2>&1 &
 ENGRAM_PID=$!
 
 # Trap signals for graceful shutdown

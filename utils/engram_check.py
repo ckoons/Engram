@@ -186,17 +186,17 @@ def check_services() -> Dict[str, Any]:
         result["api_server"]["running"] = True
         result["api_server"]["pid"] = server_pids[0]
     else:
-        # Legacy check - look for consolidated server
-        consolidated_pids = check_process_running("engram.api.consolidated_server")
+        # Check for the app-based server
+        app_pids = check_process_running("engram.api.app")
         
-        if consolidated_pids:
-            # If consolidated server is running, services are available
+        if app_pids:
+            # If app server is running, services are available
             result["memory_server"]["running"] = True
-            result["memory_server"]["pid"] = consolidated_pids[0]
+            result["memory_server"]["pid"] = app_pids[0]
             result["api_server"]["running"] = True
-            result["api_server"]["pid"] = consolidated_pids[0]
+            result["api_server"]["pid"] = app_pids[0]
         else:
-            # Legacy legacy check - look for separate memory server and HTTP wrapper
+            # Legacy check - look for separate memory server and HTTP wrapper
             memory_pids = check_process_running("engram_server") or check_process_running("engram_with_hermes")
             
             if memory_pids:
@@ -509,7 +509,7 @@ def stop_services() -> bool:
     try:
         # Kill any remaining engram server processes
         subprocess.run(["pkill", "-f", "engram.api.server"], capture_output=True)
-        subprocess.run(["pkill", "-f", "engram_consolidated"], capture_output=True)
+        subprocess.run(["pkill", "-f", "engram.api.app"], capture_output=True)
         subprocess.run(["pkill", "-f", "engram-standalone"], capture_output=True)
         subprocess.run(["pkill", "-f", "engram-for-hermes"], capture_output=True)
     except Exception:

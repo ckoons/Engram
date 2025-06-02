@@ -191,15 +191,36 @@ async def lifespan(app: FastAPI):
     
     async def cleanup_memory_manager():
         """Cleanup memory manager resources"""
+        global memory_manager
+        
         if USE_HERMES and hermes_adapter:
             try:
                 await hermes_adapter.close()
             except Exception as e:
                 logger.warning(f"Error closing Hermes adapter: {e}")
         
-        # Add any other memory manager cleanup here
-        logger.info("Memory manager cleaned up")
+        # Shutdown memory manager if it exists
+        if memory_manager:
+            try:
+                await memory_manager.shutdown()
+                logger.info("Memory manager shut down successfully")
+            except Exception as e:
+                logger.warning(f"Error shutting down memory manager: {e}")
+        
+        logger.info("Memory manager cleanup completed")
     
+    async def cleanup_heartbeat():
+        """Cancel heartbeat task if running"""
+        global heartbeat_task
+        if heartbeat_task and not heartbeat_task.done():
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Heartbeat task cancelled")
+    
+    shutdown.register_cleanup(cleanup_heartbeat)
     shutdown.register_cleanup(cleanup_hermes)
     shutdown.register_cleanup(cleanup_memory_manager)
     
@@ -228,6 +249,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add shutdown endpoint
+try:
+    from shared.utils.shutdown_endpoint import add_shutdown_endpoint_to_app
+    add_shutdown_endpoint_to_app(app, "engram")
+except ImportError:
+    logger.warning("Shutdown endpoint module not available")
 
 # Dependency to get memory service for a client
 async def get_memory_service(
