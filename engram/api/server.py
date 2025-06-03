@@ -611,9 +611,17 @@ def main():
     host = args.host or os.environ.get("ENGRAM_HOST", "127.0.0.1")
     port = args.port or (config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT", 8000)))
     
-    # Start the server
+    # Start the server with socket reuse
     logger.info(f"Starting Engram API server on {host}:{port}")
-    uvicorn.run(app, host=host, port=port)
+    from shared.utils.socket_server import run_with_socket_reuse
+    run_with_socket_reuse(
+        "engram.api.server:app",
+        host=host,
+        port=port,
+        timeout_graceful_shutdown=3,
+        server_header=False,
+        access_log=False
+    )
 
 if __name__ == "__main__":
     main()
