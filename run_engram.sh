@@ -53,7 +53,7 @@ sleep 2
 
 # Start the Engram service
 echo -e "${YELLOW}Starting Engram consolidated server...${RESET}"
-python -m engram.api.app --port $ENGRAM_PORT > "$HOME/.tekton/logs/engram.log" 2>&1 &
+python -m engram > "$HOME/.tekton/logs/engram.log" 2>&1 &
 ENGRAM_PID=$!
 
 # Trap signals for graceful shutdown
