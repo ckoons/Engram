@@ -14,7 +14,7 @@ import uuid
 from typing import Dict, List, Any, Optional, AsyncGenerator, Callable, Awaitable
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from tekton.models import TektonBaseModel
 
 # Import enhanced tekton-llm-client features
 from tekton_llm_client import (
@@ -35,11 +35,11 @@ from engram.core.memory_manager import MemoryManager
 from engram.api.dependencies import get_memory_manager
 
 # Models for request/response
-class ChatMessage(BaseModel):
+class ChatMessage(TektonBaseModel):
     role: str
     content: str
 
-class ChatRequest(BaseModel):
+class ChatRequest(TektonBaseModel):
     messages: List[ChatMessage]
     model: Optional[str] = None
     temperature: Optional[float] = 0.7
@@ -49,17 +49,17 @@ class ChatRequest(BaseModel):
     persist_memory: Optional[bool] = True
     memory_namespace: Optional[str] = "conversations"
 
-class ChatResponse(BaseModel):
+class ChatResponse(TektonBaseModel):
     content: str
     model: str
     provider: Optional[str] = None
 
-class LLMAnalysisRequest(BaseModel):
+class LLMAnalysisRequest(TektonBaseModel):
     content: str
     context: Optional[str] = None
     model: Optional[str] = None
 
-class LLMAnalysisResponse(BaseModel):
+class LLMAnalysisResponse(TektonBaseModel):
     analysis: str
     success: bool
     error: Optional[str] = None
