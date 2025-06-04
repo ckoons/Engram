@@ -32,9 +32,23 @@ from shared.utils.env_config import get_component_config
 from shared.utils.errors import StartupError
 from shared.utils.startup import component_startup, StartupMetrics
 from shared.utils.shutdown import GracefulShutdown
+from shared.api import (
+    create_standard_routers,
+    mount_standard_routers,
+    create_ready_endpoint,
+    create_discovery_endpoint,
+    get_openapi_configuration,
+    EndpointInfo
+)
 
 # Use shared logger
 logger = setup_component_logging("engram")
+
+# Component configuration
+COMPONENT_NAME = "Engram"
+COMPONENT_VERSION = "0.1.0"
+COMPONENT_DESCRIPTION = "Memory management system with vector search and semantic similarity"
+start_time = None
 
 # Check if we're in debug mode
 DEBUG = os.environ.get('ENGRAM_DEBUG', '').lower() in ('1', 'true', 'yes')
@@ -107,7 +121,11 @@ heartbeat_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for Engram"""
-    global is_registered_with_hermes, hermes_registration, heartbeat_task
+    global is_registered_with_hermes, hermes_registration, heartbeat_task, start_time
+    
+    # Track startup time
+    import time
+    start_time = time.time()
     
     # Startup
     logger.info("Starting Engram Memory API")
@@ -135,7 +153,7 @@ async def lifespan(app: FastAPI):
             is_registered_with_hermes = await hermes_registration.register_component(
                 component_name="engram",
                 port=port,
-                version="0.8.0",
+                version=COMPONENT_VERSION,
                 capabilities=[
                     "memory_storage",
                     "vector_search",
@@ -233,11 +251,13 @@ async def lifespan(app: FastAPI):
     # Socket release delay for macOS
     await asyncio.sleep(0.5)
 
-# Initialize FastAPI app
+# Initialize FastAPI app with standard configuration
 app = FastAPI(
-    title="Engram Memory API",
-    description="API for Engram memory services",
-    version="0.8.0",
+    **get_openapi_configuration(
+        component_name=COMPONENT_NAME,
+        component_version=COMPONENT_VERSION,
+        component_description=COMPONENT_DESCRIPTION
+    ),
     lifespan=lifespan
 )
 
@@ -249,6 +269,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Create standard routers
+routers = create_standard_routers(COMPONENT_NAME)
 
 
 # Dependency to get memory service for a client
@@ -268,17 +291,19 @@ async def get_memory_service(
         raise HTTPException(status_code=500, detail=f"Error getting memory service: {str(e)}")
 
 # Define routes
-@app.get("/")
+@routers.root.get("/")
 async def root():
     """Root endpoint returning basic service information."""
     return {
-        "service": "Engram Memory API",
-        "version": "0.8.0",
+        "service": f"{COMPONENT_NAME} Memory API",
+        "version": COMPONENT_VERSION,
+        "description": COMPONENT_DESCRIPTION,
         "mode": "hermes" if USE_HERMES else "standalone",
-        "fallback": USE_FALLBACK
+        "fallback": USE_FALLBACK,
+        "docs": "/api/v1/docs"
     }
 
-@app.get("/health")
+@routers.root.get("/health")
 async def health():
     """Health check endpoint."""
     try:
@@ -305,29 +330,17 @@ async def health():
             "hermes_integration": USE_HERMES
         }
     
-    # Use standardized health response if available
-    if create_health_response:
-        return create_health_response(
-            component_name="engram",
-            port=8000,
-            version="0.8.0",
-            status=health_status,
-            registered=is_registered_with_hermes,
-            details=details
-        )
-    else:
-        # Fallback to manual format
-        return {
-            "status": health_status,
-            "version": "0.8.0",
-            "timestamp": datetime.now().isoformat(),
-            "component": "engram",
-            "port": 8000,
-            "registered_with_hermes": is_registered_with_hermes,
-            "details": details
-        }
+    # Use standardized health response
+    return create_health_response(
+        component_name="engram",
+        port=int(os.environ.get("ENGRAM_PORT", 8004)),
+        version=COMPONENT_VERSION,
+        status=health_status,
+        registered=is_registered_with_hermes,
+        details=details
+    )
 
-@app.post("/memory")
+@routers.v1.post("/memory")
 async def add_memory(
     request: Request,
     memory_service: MemoryService = Depends(get_memory_service)
@@ -362,7 +375,7 @@ async def add_memory(
             content={"error": f"Error adding memory: {str(e)}"}
         )
 
-@app.get("/memory/{memory_id}")
+@routers.v1.get("/memory/{memory_id}")
 async def get_memory(
     memory_id: str,
     namespace: str = "conversations",
@@ -386,7 +399,7 @@ async def get_memory(
             content={"error": f"Error getting memory: {str(e)}"}
         )
 
-@app.post("/search")
+@routers.v1.post("/search")
 async def search_memory(
     request: Request,
     memory_service: MemoryService = Depends(get_memory_service)
@@ -426,7 +439,7 @@ async def search_memory(
             content={"error": f"Error searching memory: {str(e)}"}
         )
 
-@app.post("/context")
+@routers.v1.post("/context")
 async def get_context(
     request: Request,
     memory_service: MemoryService = Depends(get_memory_service)
@@ -458,7 +471,7 @@ async def get_context(
             content={"error": f"Error getting context: {str(e)}"}
         )
 
-@app.get("/namespaces")
+@routers.v1.get("/namespaces")
 async def list_namespaces(
     memory_service: MemoryService = Depends(get_memory_service)
 ):
@@ -473,7 +486,7 @@ async def list_namespaces(
             content={"error": f"Error listing namespaces: {str(e)}"}
         )
 
-@app.post("/compartments")
+@routers.v1.post("/compartments")
 async def create_compartment(
     request: Request,
     memory_service: MemoryService = Depends(get_memory_service)
@@ -508,7 +521,7 @@ async def create_compartment(
             content={"error": f"Error creating compartment: {str(e)}"}
         )
 
-@app.get("/compartments")
+@routers.v1.get("/compartments")
 async def list_compartments(
     include_inactive: bool = False,
     memory_service: MemoryService = Depends(get_memory_service)
@@ -524,7 +537,7 @@ async def list_compartments(
             content={"error": f"Error listing compartments: {str(e)}"}
         )
 
-@app.post("/compartments/{compartment_id}/activate")
+@routers.v1.post("/compartments/{compartment_id}/activate")
 async def activate_compartment(
     compartment_id: str,
     memory_service: MemoryService = Depends(get_memory_service)
@@ -547,7 +560,7 @@ async def activate_compartment(
             content={"error": f"Error activating compartment: {str(e)}"}
         )
 
-@app.post("/compartments/{compartment_id}/deactivate")
+@routers.v1.post("/compartments/{compartment_id}/deactivate")
 async def deactivate_compartment(
     compartment_id: str,
     memory_service: MemoryService = Depends(get_memory_service)
@@ -569,6 +582,88 @@ async def deactivate_compartment(
             status_code=500,
             content={"error": f"Error deactivating compartment: {str(e)}"}
         )
+
+
+# Add ready endpoint
+routers.root.add_api_route(
+    "/ready",
+    create_ready_endpoint(
+        component_name=COMPONENT_NAME,
+        component_version=COMPONENT_VERSION,
+        start_time=start_time or 0,
+        readiness_check=lambda: memory_manager is not None
+    ),
+    methods=["GET"]
+)
+
+# Add discovery endpoint to v1 router
+routers.v1.add_api_route(
+    "/discovery",
+    create_discovery_endpoint(
+        component_name=COMPONENT_NAME,
+        component_version=COMPONENT_VERSION,
+        component_description=COMPONENT_DESCRIPTION,
+        endpoints=[
+            EndpointInfo(
+                path="/api/v1/memory",
+                method="POST",
+                description="Add a memory"
+            ),
+            EndpointInfo(
+                path="/api/v1/memory/{memory_id}",
+                method="GET",
+                description="Get a memory by ID"
+            ),
+            EndpointInfo(
+                path="/api/v1/search",
+                method="POST",
+                description="Search memories"
+            ),
+            EndpointInfo(
+                path="/api/v1/context",
+                method="POST",
+                description="Get recent context"
+            ),
+            EndpointInfo(
+                path="/api/v1/namespaces",
+                method="GET",
+                description="List all namespaces"
+            ),
+            EndpointInfo(
+                path="/api/v1/compartments",
+                method="GET",
+                description="List all compartments"
+            )
+        ],
+        capabilities=[
+            "memory_storage",
+            "vector_search",
+            "semantic_similarity",
+            "memory_retrieval",
+            "conversation_memory"
+        ],
+        dependencies={
+            "hermes": "http://localhost:8001"
+        },
+        metadata={
+            "vector_support": not USE_FALLBACK,
+            "storage_type": "vector" if not USE_FALLBACK else "simple",
+            "documentation": "/api/v1/docs"
+        }
+    ),
+    methods=["GET"]
+)
+
+# Mount standard routers
+mount_standard_routers(app, routers)
+
+# Import and include MCP router if available
+try:
+    from engram.api.fastmcp_endpoints import mcp_router
+    app.include_router(mcp_router)
+    logger.info("FastMCP endpoints added to Engram API")
+except ImportError as e:
+    logger.warning(f"FastMCP endpoints not available: {e}")
 
 
 def parse_arguments():
