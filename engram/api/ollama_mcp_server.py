@@ -25,12 +25,14 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(script_dir, "../.."))
 sys.path.insert(0, project_root)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("engram.ollama_mcp_server")
+# Add Tekton root to path for shared imports
+tekton_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if tekton_root not in sys.path:
+    sys.path.insert(0, tekton_root)
+
+# Use shared logging setup
+from shared.utils.logging_setup import setup_component_logging
+logger = setup_component_logging("engram")
 
 # Import Engram modules
 try:
