@@ -42,15 +42,8 @@ class EngramMCPBridge(MCPService):
         
         # Load FastMCP tools
         try:
-            from engram.core.mcp import (
-                get_memory_tools,
-                get_structured_memory_tools,
-                get_nexus_tools
-            )
-            memory_tools = get_memory_tools(self.memory_manager)
-            structured_tools = get_structured_memory_tools(self.memory_manager)
-            nexus_tools = get_nexus_tools(self.memory_manager)
-            self._fastmcp_tools = memory_tools + structured_tools + nexus_tools
+            from engram.core.mcp import get_all_tools
+            self._fastmcp_tools = get_all_tools(self.memory_manager)
             logger.info(f"Loaded {len(self._fastmcp_tools)} FastMCP tools")
         except Exception as e:
             logger.error(f"Failed to load FastMCP tools: {e}")
