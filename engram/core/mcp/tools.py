@@ -657,19 +657,19 @@ def get_all_tools(memory_manager=None):
     tools = []
     
     # Memory tools
-    tools.append(MCPTool.from_dict(memory_store._mcp_tool_meta.to_dict()))
-    tools.append(MCPTool.from_dict(memory_query._mcp_tool_meta.to_dict()))
-    tools.append(MCPTool.from_dict(get_context._mcp_tool_meta.to_dict()))
+    tools.append(memory_store._mcp_tool_meta.to_dict())
+    tools.append(memory_query._mcp_tool_meta.to_dict())
+    tools.append(get_context._mcp_tool_meta.to_dict())
     
     # Structured memory tools
-    tools.append(MCPTool.from_dict(structured_memory_add._mcp_tool_meta.to_dict()))
-    tools.append(MCPTool.from_dict(structured_memory_get._mcp_tool_meta.to_dict()))
-    tools.append(MCPTool.from_dict(structured_memory_update._mcp_tool_meta.to_dict()))
-    tools.append(MCPTool.from_dict(structured_memory_delete._mcp_tool_meta.to_dict()))
-    tools.append(MCPTool.from_dict(structured_memory_search._mcp_tool_meta.to_dict()))
+    tools.append(structured_memory_add._mcp_tool_meta.to_dict())
+    tools.append(structured_memory_get._mcp_tool_meta.to_dict())
+    tools.append(structured_memory_update._mcp_tool_meta.to_dict())
+    tools.append(structured_memory_delete._mcp_tool_meta.to_dict())
+    tools.append(structured_memory_search._mcp_tool_meta.to_dict())
     
     # Nexus tools
-    tools.append(MCPTool.from_dict(nexus_process._mcp_tool_meta.to_dict()))
+    tools.append(nexus_process._mcp_tool_meta.to_dict())
     
     return tools
 

@@ -117,6 +117,7 @@ if USE_HERMES:
 is_registered_with_hermes = False
 hermes_registration = None
 heartbeat_task = None
+mcp_bridge = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -177,6 +178,16 @@ async def lifespan(app: FastAPI):
                 logger.info("Started Hermes heartbeat task")
             else:
                 logger.warning("Failed to register with Hermes - continuing without registration")
+            
+            # Initialize FastMCP tools with Hermes bridge
+            try:
+                from engram.core.mcp.hermes_bridge import EngramMCPBridge
+                global mcp_bridge
+                mcp_bridge = EngramMCPBridge(memory_manager)
+                await mcp_bridge.initialize()
+                logger.info("Initialized Hermes MCP Bridge for FastMCP tools")
+            except Exception as e:
+                logger.warning(f"Failed to initialize MCP Bridge: {e}")
                 
         except Exception as e:
             logger.error(f"Error during Engram startup: {e}", exc_info=True)
@@ -238,9 +249,20 @@ async def lifespan(app: FastAPI):
                 pass
             logger.info("Heartbeat task cancelled")
     
+    async def cleanup_mcp_bridge():
+        """Cleanup MCP bridge"""
+        global mcp_bridge
+        if mcp_bridge:
+            try:
+                await mcp_bridge.shutdown()
+                logger.info("MCP bridge cleaned up")
+            except Exception as e:
+                logger.warning(f"Error cleaning up MCP bridge: {e}")
+    
     shutdown.register_cleanup(cleanup_heartbeat)
     shutdown.register_cleanup(cleanup_hermes)
     shutdown.register_cleanup(cleanup_memory_manager)
+    shutdown.register_cleanup(cleanup_mcp_bridge)
     
     yield
     
