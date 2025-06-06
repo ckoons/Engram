@@ -95,17 +95,7 @@ class EngramMCPBridge(MCPService):
         # Create handler that delegates to FastMCP
         async def handler(parameters: Dict[str, Any]) -> Dict[str, Any]:
             # Import here to avoid circular imports
-            try:
-                from engram.api.fastmcp_endpoints import process_request_func
-            except ImportError:
-                # Fallback to calling the tool directly
-                from engram.core.mcp.tools import get_tool_handler
-                tool_handler = get_tool_handler(fastmcp_tool['name'])
-                if tool_handler:
-                    return await tool_handler(self.memory_manager, **parameters)
-                else:
-                    raise Exception(f"Tool handler not found for {fastmcp_tool['name']}")
-            
+            from tekton.mcp.fastmcp.utils.requests import process_mcp_request
             from tekton.mcp.fastmcp.schema import MCPRequest
             
             # Create an MCP request for the FastMCP handler
@@ -116,7 +106,11 @@ class EngramMCPBridge(MCPService):
             )
             
             # Process through FastMCP
-            response = await process_request_func(self.memory_manager, request)
+            response = await process_mcp_request(
+                component_manager=self.memory_manager,
+                request=request,
+                component_module_path="engram.core.mcp.tools"
+            )
             
             # Extract result from response
             if response.status == "success":
