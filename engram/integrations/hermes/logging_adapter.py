@@ -58,7 +58,9 @@ class LoggingAdapter:
         if log_file:
             self.log_file = Path(log_file)
         else:
-            log_dir = Path(os.path.expanduser("~/.tekton/logs"))
+            log_dir = Path(os.environ.get('TEKTON_LOG_DIR', 
+                                          os.path.join(os.environ.get('TEKTON_ROOT', os.path.expanduser('~')), 
+                                                      '.tekton', 'logs')))
             log_dir.mkdir(parents=True, exist_ok=True)
             self.log_file = log_dir / f"engram_{client_id}.log"
         

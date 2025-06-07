@@ -34,7 +34,8 @@ setup_tekton_env "$SCRIPT_DIR" "$TEKTON_ROOT"
 export ENGRAM_MODE="tekton"
 
 # Create log directories
-mkdir -p "$HOME/.tekton/logs"
+LOG_DIR="${TEKTON_LOG_DIR:-$TEKTON_ROOT/.tekton/logs}"
+mkdir -p "$LOG_DIR"
 
 # Error handling function
 handle_error() {
@@ -58,7 +59,7 @@ sleep 2
 
 # Start the Engram service
 echo -e "${YELLOW}Starting Engram consolidated server...${RESET}"
-python -m engram > "$HOME/.tekton/logs/engram.log" 2>&1 &
+python -m engram > "$LOG_DIR/engram.log" 2>&1 &
 ENGRAM_PID=$!
 
 # Trap signals for graceful shutdown
@@ -77,7 +78,7 @@ for i in {1..30}; do
     # Check if the process is still running
     if ! kill -0 $ENGRAM_PID 2>/dev/null; then
         echo -e "${RED}Engram process terminated unexpectedly${RESET}"
-        cat "$HOME/.tekton/logs/engram.log"
+        cat "$LOG_DIR/engram.log"
         handle_error "Engram failed to start"
     fi
     
