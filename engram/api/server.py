@@ -136,7 +136,7 @@ async def lifespan(app: FastAPI):
         try:
             # Get configuration
             config = get_component_config()
-            port = config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT", 8000))
+            port = config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT"))
             
             if USE_HERMES:
                 try:
@@ -353,9 +353,11 @@ async def health():
         }
     
     # Use standardized health response
+    config = get_component_config()
+    port = config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT"))
     return create_health_response(
         component_name="engram",
-        port=int(os.environ.get("ENGRAM_PORT", 8004)),
+        port=port,
         version=COMPONENT_VERSION,
         status=health_status,
         registered=is_registered_with_hermes,
@@ -726,7 +728,7 @@ def main():
     # Get host and port from environment or arguments using standardized port config
     config = get_component_config()
     host = args.host or os.environ.get("ENGRAM_HOST", "127.0.0.1")
-    port = args.port or (config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT", 8000)))
+    port = args.port or (config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT")))
     
     # Start the server with socket reuse
     logger.info(f"Starting Engram API server on {host}:{port}")
