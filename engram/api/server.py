@@ -45,8 +45,9 @@ from shared.api import (
 # Use shared logger
 logger = setup_component_logging("engram")
 
-# Import Engram component
+# Import Engram component and services
 from engram.core.engram_component import EngramComponent
+from engram.core import MemoryService
 
 # Create component singleton
 engram_component = EngramComponent()
@@ -61,40 +62,14 @@ async def startup_callback():
         capabilities=engram_component.get_capabilities(),
         metadata=engram_component.get_metadata()
     )
-            logger.info("Heartbeat task cancelled")
-    
-    async def cleanup_mcp_bridge():
-        """Cleanup MCP bridge"""
-        global mcp_bridge
-        if mcp_bridge:
-            try:
-                await mcp_bridge.shutdown()
-                logger.info("MCP bridge cleaned up")
-            except Exception as e:
-                logger.warning(f"Error cleaning up MCP bridge: {e}")
-    
-    shutdown.register_cleanup(cleanup_heartbeat)
-    shutdown.register_cleanup(cleanup_hermes)
-    shutdown.register_cleanup(cleanup_memory_manager)
-    shutdown.register_cleanup(cleanup_mcp_bridge)
-    
-    yield
-    
-    # Shutdown
-    logger.info("Shutting down Engram Memory API")
-    await shutdown.shutdown_sequence(timeout=10)
-    
-    # Socket release delay for macOS
-    await asyncio.sleep(0.5)
 
 # Initialize FastAPI app with standard configuration
 app = FastAPI(
     **get_openapi_configuration(
-        component_name=COMPONENT_NAME,
-        component_version=COMPONENT_VERSION,
-        component_description=COMPONENT_DESCRIPTION
-    ),
-    lifespan=lifespan
+        component_name="engram",
+        component_version="0.1.0",
+        component_description="Memory management system with vector search and semantic similarity"
+    )
 )
 
 # Add CORS middleware
@@ -107,7 +82,15 @@ app.add_middleware(
 )
 
 # Create standard routers
-routers = create_standard_routers(COMPONENT_NAME)
+routers = create_standard_routers("engram")
+
+# Store component reference for endpoints
+app.state.component = engram_component
+
+# Register startup callback
+@app.on_event("startup")
+async def startup_event():
+    await startup_callback()
 
 
 # Dependency to get memory service for a client
@@ -142,29 +125,17 @@ async def root():
 @routers.root.get("/health")
 async def health():
     """Health check endpoint."""
-    try:
-        # Check if we can get the default memory service
-        memory_service = await engram_component.memory_manager.get_memory_service(engram_component.default_client_id)
-        
-        # Try to get storage info
-        storage_info = await memory_service.get_storage_info()
-        
-        health_status = "healthy"
-        details = {
-            "client_id": engram_component.default_client_id,
-            "storage_type": storage_info.get("storage_type", "unknown"),
-            "vector_available": not engram_component.use_fallback,
-            "hermes_integration": engram_component.use_hermes
-        }
-        
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        health_status = "unhealthy"
-        details = {
-            "error": str(e),
-            "vector_available": not engram_component.use_fallback,
-            "hermes_integration": engram_component.use_hermes
-        }
+    # Don't trigger memory service initialization during health check
+    # This avoids loading the sentence transformer model unnecessarily
+    health_status = "healthy" if engram_component.memory_manager is not None else "initializing"
+    
+    details = {
+        "memory_manager_initialized": bool(engram_component.memory_manager),
+        "storage_mode": "fallback" if engram_component.use_fallback else "vector",
+        "vector_available": not engram_component.use_fallback,
+        "hermes_integration": engram_component.use_hermes,
+        "default_client_id": engram_component.default_client_id
+    }
     
     # Use standardized health response
     global_config = GlobalConfig.get_instance()
@@ -478,7 +449,6 @@ routers.v1.add_api_route(
             "hermes": "http://localhost:8001"
         },
         metadata=engram_component.get_metadata()
-        }
     ),
     methods=["GET"]
 )
@@ -530,10 +500,12 @@ def main():
         os.environ["ENGRAM_DEBUG"] = "1"
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Get host and port from environment or arguments using standardized port config
-    config = get_component_config()
+    # Get GlobalConfig instance
+    global_config = GlobalConfig.get_instance()
+    
+    # Get host and port from GlobalConfig or arguments
     host = args.host or os.environ.get("ENGRAM_HOST", "127.0.0.1")
-    port = args.port or (config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT")))
+    port = args.port or global_config.config.engram.port
     
     # Start the server with socket reuse
     logger.info(f"Starting Engram API server on {host}:{port}")

@@ -29,11 +29,11 @@ class EngramComponent(StandardComponentBase):
         engram_config = self.global_config.get_component_config("engram")
         
         # Configure modes from config or environment
-        self.debug_mode = engram_config.get("debug", 
+        self.debug_mode = getattr(engram_config, "debug", 
             os.environ.get('ENGRAM_DEBUG', '').lower() in ('1', 'true', 'yes'))
-        self.use_fallback = engram_config.get("use_fallback", 
+        self.use_fallback = getattr(engram_config, "use_fallback", 
             os.environ.get('ENGRAM_USE_FALLBACK', '').lower() in ('1', 'true', 'yes'))
-        self.use_hermes = engram_config.get("hermes_mode", 
+        self.use_hermes = getattr(engram_config, "hermes_mode", 
             os.environ.get('ENGRAM_MODE', '').lower() == 'hermes')
         
         # Set up logging level
@@ -59,7 +59,7 @@ class EngramComponent(StandardComponentBase):
         logger.info(f"Data directory initialized at: {self.data_dir}")
         
         # Get client ID from config or environment
-        self.default_client_id = engram_config.get("default_client_id",
+        self.default_client_id = getattr(engram_config, "default_client_id",
             os.environ.get("ENGRAM_CLIENT_ID", "default"))
         
         # Initialize memory manager based on storage mode
