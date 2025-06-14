@@ -15,11 +15,13 @@ __version__ = "0.3.0"
 from engram.core.memory_faiss import MemoryService
 from engram.core.memory import LatentMemorySpace, LatentSpaceManager, ThoughtState
 from engram.core.latent_interface import LatentInterface
+from engram.core.engram_component import EngramComponent
 
 __all__ = [
     "MemoryService", 
     "LatentMemorySpace", 
     "LatentSpaceManager", 
     "ThoughtState",
-    "LatentInterface"
+    "LatentInterface",
+    "EngramComponent"
 ]

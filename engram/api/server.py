@@ -29,6 +29,7 @@ from shared.utils.health_check import create_health_response
 from shared.utils.hermes_registration import HermesRegistration, heartbeat_loop
 from shared.utils.logging_setup import setup_component_logging
 from shared.utils.env_config import get_component_config
+from shared.utils.global_config import GlobalConfig
 from shared.utils.errors import StartupError
 from shared.utils.startup import component_startup, StartupMetrics
 from shared.utils.shutdown import GracefulShutdown
@@ -44,209 +45,22 @@ from shared.api import (
 # Use shared logger
 logger = setup_component_logging("engram")
 
-# Component configuration
-COMPONENT_NAME = "Engram"
-COMPONENT_VERSION = "0.1.0"
-COMPONENT_DESCRIPTION = "Memory management system with vector search and semantic similarity"
-start_time = None
+# Import Engram component
+from engram.core.engram_component import EngramComponent
 
-# Check if we're in debug mode
-DEBUG = os.environ.get('ENGRAM_DEBUG', '').lower() in ('1', 'true', 'yes')
-if DEBUG:
-    logging.getLogger().setLevel(logging.DEBUG)
-    logger.setLevel(logging.DEBUG)
-    logger.debug("Debug mode enabled")
+# Create component singleton
+engram_component = EngramComponent()
 
-# Check if we're in fallback mode
-USE_FALLBACK = os.environ.get('ENGRAM_USE_FALLBACK', '').lower() in ('1', 'true', 'yes')
-if USE_FALLBACK:
-    logger.info("Fallback mode enabled - using file-based storage")
+# Note: Component configuration and initialization is handled by EngramComponent
+# The component manages memory_manager, hermes_adapter, mcp_bridge internally
 
-# Check if we're in Hermes mode
-USE_HERMES = os.environ.get('ENGRAM_MODE', '').lower() == 'hermes'
-if USE_HERMES:
-    logger.info("Hermes integration mode enabled")
-
-# Import Engram core modules
-try:
-    from engram.core.memory_manager import MemoryManager
-    from engram.core.memory.base import MemoryService
-except ImportError as e:
-    logger.error(f"Failed to import Engram core modules: {e}")
-    logger.error("Make sure Engram is properly installed or in your PYTHONPATH")
-    sys.exit(1)
-
-# Initialize memory manager
-default_client_id = os.environ.get("ENGRAM_CLIENT_ID", "default")
-data_dir = os.environ.get("ENGRAM_DATA_DIR", None)
-
-try:
-    memory_manager = MemoryManager(data_dir=data_dir)
-    logger.info(f"Memory manager initialized with data directory: {data_dir or '~/.engram'}")
-    logger.info(f"Default client ID: {default_client_id}")
-except Exception as e:
-    logger.error(f"Failed to initialize memory manager: {e}")
-    memory_manager = None
-    sys.exit(1)
-
-# Initialize Hermes integration if enabled
-hermes_adapter = None
-if USE_HERMES:
-    try:
-        from engram.integrations.hermes.memory_adapter import HermesMemoryAdapter
-        
-        # Initialize Hermes adapter
-        hermes_adapter = HermesMemoryAdapter(memory_manager)
-        logger.info("Hermes memory adapter initialized")
-        
-        # Start Hermes integration in background task
-        async def start_hermes_integration():
-            try:
-                await hermes_adapter.initialize()
-                logger.info("Hermes integration initialized")
-            except Exception as e:
-                logger.error(f"Failed to initialize Hermes integration: {e}")
-        
-        # We'll start this after the API server is running
-    except ImportError as e:
-        logger.error(f"Failed to initialize Hermes integration: {e}")
-        logger.warning("Continuing without Hermes integration")
-        USE_HERMES = False
-
-# Global state for Hermes registration
-is_registered_with_hermes = False
-hermes_registration = None
-heartbeat_task = None
-mcp_bridge = None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for Engram"""
-    global is_registered_with_hermes, hermes_registration, heartbeat_task, start_time
-    
-    # Track startup time
-    import time
-    start_time = time.time()
-    
-    # Startup
-    logger.info("Starting Engram Memory API")
-    
-    async def engram_startup():
-        """Engram-specific startup logic"""
-        try:
-            # Get configuration
-            config = get_component_config()
-            port = config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT"))
-            
-            if USE_HERMES:
-                try:
-                    # Start Hermes integration
-                    await start_hermes_integration()
-                except Exception as e:
-                    logger.error(f"Failed to start Hermes integration: {e}")
-                    logger.warning("Continuing without Hermes integration")
-            
-            # Register with Hermes
-            global is_registered_with_hermes, hermes_registration, heartbeat_task
-            hermes_registration = HermesRegistration()
-            
-            logger.info(f"Attempting to register Engram with Hermes on port {port}")
-            is_registered_with_hermes = await hermes_registration.register_component(
-                component_name="engram",
-                port=port,
-                version=COMPONENT_VERSION,
-                capabilities=[
-                    "memory_storage",
-                    "vector_search",
-                    "semantic_similarity",
-                    "memory_retrieval",
-                    "conversation_memory"
-                ],
-                metadata={
-                    "vector_support": not USE_FALLBACK,
-                    "storage_type": "vector" if not USE_FALLBACK else "simple",
-                    "hermes_integration": USE_HERMES
-                }
-            )
-            
-            if is_registered_with_hermes:
-                logger.info("Successfully registered with Hermes")
-                # Start heartbeat task
-                heartbeat_task = asyncio.create_task(
-                    heartbeat_loop(hermes_registration, "engram", interval=30)
-                )
-                logger.info("Started Hermes heartbeat task")
-            else:
-                logger.warning("Failed to register with Hermes - continuing without registration")
-            
-            # Initialize FastMCP tools with Hermes bridge
-            try:
-                from engram.core.mcp.hermes_bridge import EngramMCPBridge
-                global mcp_bridge
-                mcp_bridge = EngramMCPBridge(memory_manager)
-                await mcp_bridge.initialize()
-                logger.info("Initialized Hermes MCP Bridge for FastMCP tools")
-            except Exception as e:
-                logger.warning(f"Failed to initialize MCP Bridge: {e}")
-                
-        except Exception as e:
-            logger.error(f"Error during Engram startup: {e}", exc_info=True)
-            raise StartupError(str(e), "engram", "STARTUP_FAILED")
-    
-    # Execute startup with metrics
-    try:
-        metrics = await component_startup("engram", engram_startup, timeout=30)
-        logger.info(f"Engram started successfully in {metrics.total_time:.2f}s")
-    except Exception as e:
-        logger.error(f"Failed to start Engram: {e}")
-        raise
-    
-    # Create shutdown handler
-    shutdown = GracefulShutdown("engram")
-    
-    # Register cleanup tasks
-    async def cleanup_hermes():
-        """Cleanup Hermes registration"""
-        if heartbeat_task:
-            heartbeat_task.cancel()
-            try:
-                await heartbeat_task
-            except asyncio.CancelledError:
-                pass
-        
-        if hermes_registration and is_registered_with_hermes:
-            await hermes_registration.deregister("engram")
-            logger.info("Deregistered from Hermes")
-    
-    async def cleanup_memory_manager():
-        """Cleanup memory manager resources"""
-        global memory_manager
-        
-        if USE_HERMES and hermes_adapter:
-            try:
-                await hermes_adapter.close()
-            except Exception as e:
-                logger.warning(f"Error closing Hermes adapter: {e}")
-        
-        # Shutdown memory manager if it exists
-        if memory_manager:
-            try:
-                await memory_manager.shutdown()
-                logger.info("Memory manager shut down successfully")
-            except Exception as e:
-                logger.warning(f"Error shutting down memory manager: {e}")
-        
-        logger.info("Memory manager cleanup completed")
-    
-    async def cleanup_heartbeat():
-        """Cancel heartbeat task if running"""
-        global heartbeat_task
-        if heartbeat_task and not heartbeat_task.done():
-            heartbeat_task.cancel()
-            try:
-                await heartbeat_task
-            except asyncio.CancelledError:
-                pass
+async def startup_callback():
+    """Initialize Engram component (includes Hermes registration)."""
+    # Initialize component (includes Hermes registration)
+    await engram_component.initialize(
+        capabilities=engram_component.get_capabilities(),
+        metadata=engram_component.get_metadata()
+    )
             logger.info("Heartbeat task cancelled")
     
     async def cleanup_mcp_bridge():
@@ -301,13 +115,13 @@ async def get_memory_service(
     request: Request,
     x_client_id: str = Header(None)
 ) -> MemoryService:
-    client_id = x_client_id or default_client_id
+    client_id = x_client_id or engram_component.default_client_id
     
-    if memory_manager is None:
+    if engram_component.memory_manager is None:
         raise HTTPException(status_code=500, detail="Memory manager not initialized")
     
     try:
-        return await memory_manager.get_memory_service(client_id)
+        return await engram_component.memory_manager.get_memory_service(client_id)
     except Exception as e:
         logger.error(f"Error getting memory service: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting memory service: {str(e)}")
@@ -317,11 +131,11 @@ async def get_memory_service(
 async def root():
     """Root endpoint returning basic service information."""
     return {
-        "service": f"{COMPONENT_NAME} Memory API",
-        "version": COMPONENT_VERSION,
-        "description": COMPONENT_DESCRIPTION,
-        "mode": "hermes" if USE_HERMES else "standalone",
-        "fallback": USE_FALLBACK,
+        "service": "Engram Memory API",
+        "version": "0.1.0",
+        "description": "Memory management system with vector search and semantic similarity",
+        "mode": "hermes" if engram_component.use_hermes else "standalone",
+        "fallback": engram_component.use_fallback,
         "docs": "/api/v1/docs"
     }
 
@@ -330,17 +144,17 @@ async def health():
     """Health check endpoint."""
     try:
         # Check if we can get the default memory service
-        memory_service = await memory_manager.get_memory_service(default_client_id)
+        memory_service = await engram_component.memory_manager.get_memory_service(engram_component.default_client_id)
         
         # Try to get storage info
         storage_info = await memory_service.get_storage_info()
         
         health_status = "healthy"
         details = {
-            "client_id": default_client_id,
+            "client_id": engram_component.default_client_id,
             "storage_type": storage_info.get("storage_type", "unknown"),
-            "vector_available": not USE_FALLBACK,
-            "hermes_integration": USE_HERMES
+            "vector_available": not engram_component.use_fallback,
+            "hermes_integration": engram_component.use_hermes
         }
         
     except Exception as e:
@@ -348,19 +162,19 @@ async def health():
         health_status = "unhealthy"
         details = {
             "error": str(e),
-            "vector_available": not USE_FALLBACK,
-            "hermes_integration": USE_HERMES
+            "vector_available": not engram_component.use_fallback,
+            "hermes_integration": engram_component.use_hermes
         }
     
     # Use standardized health response
-    config = get_component_config()
-    port = config.engram.port if hasattr(config, 'engram') else int(os.environ.get("ENGRAM_PORT"))
+    global_config = GlobalConfig.get_instance()
+    port = global_config.config.engram.port
     return create_health_response(
         component_name="engram",
         port=port,
-        version=COMPONENT_VERSION,
+        version="0.1.0",
         status=health_status,
-        registered=is_registered_with_hermes,
+        registered=engram_component.global_config.is_registered_with_hermes,
         details=details
     )
 
@@ -612,10 +426,10 @@ async def deactivate_compartment(
 routers.root.add_api_route(
     "/ready",
     create_ready_endpoint(
-        component_name=COMPONENT_NAME,
-        component_version=COMPONENT_VERSION,
-        start_time=start_time or 0,
-        readiness_check=lambda: memory_manager is not None
+        component_name="engram",
+        component_version="0.1.0",
+        start_time=engram_component.global_config._start_time,
+        readiness_check=lambda: engram_component.memory_manager is not None
     ),
     methods=["GET"]
 )
@@ -624,9 +438,9 @@ routers.root.add_api_route(
 routers.v1.add_api_route(
     "/discovery",
     create_discovery_endpoint(
-        component_name=COMPONENT_NAME,
-        component_version=COMPONENT_VERSION,
-        component_description=COMPONENT_DESCRIPTION,
+        component_name="engram",
+        component_version="0.1.0",
+        component_description="Memory management system with vector search and semantic similarity",
         endpoints=[
             EndpointInfo(
                 path="/api/v1/memory",
@@ -659,20 +473,11 @@ routers.v1.add_api_route(
                 description="List all compartments"
             )
         ],
-        capabilities=[
-            "memory_storage",
-            "vector_search",
-            "semantic_similarity",
-            "memory_retrieval",
-            "conversation_memory"
-        ],
+        capabilities=engram_component.get_capabilities(),
         dependencies={
             "hermes": "http://localhost:8001"
         },
-        metadata={
-            "vector_support": not USE_FALLBACK,
-            "storage_type": "vector" if not USE_FALLBACK else "simple",
-            "documentation": "/api/v1/docs"
+        metadata=engram_component.get_metadata()
         }
     ),
     methods=["GET"]
