@@ -456,13 +456,8 @@ routers.v1.add_api_route(
 # Mount standard routers
 mount_standard_routers(app, routers)
 
-# Import and include MCP router if available
-try:
-    from engram.api.fastmcp_endpoints import mcp_router
-    app.include_router(mcp_router)
-    logger.info("FastMCP endpoints added to Engram API")
-except ImportError as e:
-    logger.warning(f"FastMCP endpoints not available: {e}")
+# Note: Engram uses shared MCP bridge instead of FastMCP endpoints
+# The fastmcp_server.py is a standalone server for alternative MCP mode
 
 
 def parse_arguments():

@@ -23,5 +23,5 @@ echo "====================================="
 # Create data directory if it doesn't exist
 mkdir -p "$ENGRAM_DATA_DIR"
 
-# Launch FastMCP server
-python -m engram.api.fastmcp_server --client-id "$ENGRAM_CLIENT_ID" --data-dir "$ENGRAM_DATA_DIR" --port "$ENGRAM_PORT"
+# Launch Engram in standalone MCP mode
+python -m engram --standalone --client-id "$ENGRAM_CLIENT_ID" --data-dir "$ENGRAM_DATA_DIR" --port "$ENGRAM_PORT"
